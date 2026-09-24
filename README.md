@@ -21,7 +21,13 @@ duplicated in C#. The renderer is in [backend/Pdf/Renderer.cs](backend/Pdf/Rende
 fonts (Inter and JetBrains Mono, both SIL OFL) are in `backend/Pdf/fonts`.
 
 Rough numbers on a laptop: 500 RMs takes about 34 seconds and produces a ZIP of about
-90 MB (each PDF embeds its fonts).
+90 MB (each PDF is roughly 180 KB because it embeds its fonts). The ZIP is streamed from the
+server one PDF at a time, so memory stays low (about 190 MB while producing 1,667 PDFs).
+
+Large exports are split automatically. The frontend generates a small sample to estimate
+the total size and, if it would pass about 450 MB, downloads several ZIP files
+(`..._part1of3.zip`, and so on) from the single button. 5,000 RMs comes to about 0.9 GB, so
+3 files, and each part takes a couple of minutes to generate.
 
 The HTML version of each breakdown is built in the browser and can be downloaded per RM
 from the preview page, or as a ZIP from the export page.

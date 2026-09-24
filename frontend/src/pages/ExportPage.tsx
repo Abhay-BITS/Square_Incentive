@@ -9,7 +9,7 @@ import { BackLink } from '../components/BackLink';
 
 export default function ExportPage() {
   const { rms, toast } = useApp();
-  const [serverBusy, setServerBusy] = useState(false);
+  const [zipStatus, setZipStatus] = useState<string | null>(null);
 
   const diag = useMemo(() => {
     const buckets = { positive: 0, zero: 0, held: 0, negative: 0 };
@@ -29,14 +29,14 @@ export default function ExportPage() {
   if (rms.length === 0) return <Navigate to="/" replace />;
 
   async function handleServerZip() {
-    setServerBusy(true);
+    setZipStatus('Generating…');
     try {
-      await downloadServerPdfZip(rms);
-      toast(`Generated ${rms.length} PDFs`, 'success');
+      const parts = await downloadServerPdfZip(rms, setZipStatus);
+      toast(parts > 1 ? `Generated ${rms.length} PDFs in ${parts} ZIP files` : `Generated ${rms.length} PDFs`, 'success');
     } catch (e) {
       toast('PDF generation failed: ' + (e instanceof Error ? e.message : String(e)), 'err');
     } finally {
-      setServerBusy(false);
+      setZipStatus(null);
     }
   }
 
@@ -61,13 +61,13 @@ export default function ExportPage() {
            <div className="export-option-body">
              <h3>ZIP of PDFs</h3>
              <p>
-               One PDF per RM, filename <code>EmployeeCode_MonthDD.pdf</code>.
+               One PDF per RM, filename <code>EmployeeCode_MonthDD.pdf</code>. Very large batches are split into several ZIP files automatically, so your browser may ask to allow multiple downloads.
              </p>
            </div>
-           <button className="btn primary" onClick={handleServerZip} disabled={serverBusy}>
-             {serverBusy ? (
+           <button className="btn primary" onClick={handleServerZip} disabled={zipStatus !== null}>
+             {zipStatus ? (
                <>
-                 <span className="spinner"></span> Generating…
+                 <span className="spinner"></span> {zipStatus}
                </>
              ) : (
                'Download PDFs (ZIP)'

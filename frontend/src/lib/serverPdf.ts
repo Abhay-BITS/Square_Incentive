@@ -28,7 +28,39 @@ export async function downloadServerPdf(rm: Rm): Promise<void> {
   saveAs(blob, `${rm.empCode}_${rm.calc.ddShort}DD.pdf`);
 }
 
-export async function downloadServerPdfZip(rms: Rm[]): Promise<void> {
-  const blob = await post('/api/pdf/zip', rms);
-  saveAs(blob, 'incentive_pdfs_server_' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.zip');
+// Each ZIP part is kept under this size so no single download (or the memory the browser
+// needs to hold it) gets too large. Parts are downloaded one after another from one click.
+const MAX_PART_BYTES = 450 * 1024 * 1024;
+const PROBE_COUNT = 20;
+const SAFETY = 1.25;
+
+function stamp(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+}
+
+export async function downloadServerPdfZip(rms: Rm[], onProgress?: (message: string) => void): Promise<number> {
+  const ts = stamp();
+
+  if (rms.length <= PROBE_COUNT) {
+    onProgress?.('Generating…');
+    saveAs(await post('/api/pdf/zip', rms), `incentive_pdfs_server_${ts}.zip`);
+    return 1;
+  }
+
+  // Generate a small sample first to learn the average PDF size, then decide how many
+  // parts the full export needs.
+  onProgress?.('Estimating size…');
+  const probe = await post('/api/pdf/zip', rms.slice(0, PROBE_COUNT));
+  const estimatedTotal = (probe.size / PROBE_COUNT) * SAFETY * rms.length;
+  const parts = Math.max(1, Math.ceil(estimatedTotal / MAX_PART_BYTES));
+  const perPart = Math.ceil(rms.length / parts);
+
+  for (let i = 0; i < parts; i++) {
+    onProgress?.(parts === 1 ? 'Generating…' : `Generating part ${i + 1} of ${parts}…`);
+    const chunk = rms.slice(i * perPart, (i + 1) * perPart);
+    const blob = await post('/api/pdf/zip', chunk);
+    const suffix = parts === 1 ? '' : `_part${i + 1}of${parts}`;
+    saveAs(blob, `incentive_pdfs_server_${ts}${suffix}.zip`);
+  }
+  return parts;
 }
