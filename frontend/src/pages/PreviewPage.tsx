@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { fmtINR, generateEmailHtml, generatePlainText } from '../lib/engine.js';
 import type { Rm } from '../lib/engine.js';
-import { downloadSinglePdf } from '../lib/pdfExport';
+import { downloadHtml } from '../lib/pdfExport';
 import { downloadServerPdf } from '../lib/serverPdf';
 import { useApp } from '../context/AppContext';
 import { Layout } from '../components/Layout';
@@ -34,7 +34,6 @@ export default function PreviewPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [pdfBusy, setPdfBusy] = useState(false);
   const [serverBusy, setServerBusy] = useState(false);
 
   useEffect(() => {
@@ -63,35 +62,23 @@ export default function PreviewPage() {
 
   const activeRm = rms.find((r) => r.id === activeRmId) || null;
 
-  async function downloadPdf() {
-    if (!activeRm) return;
-    setPdfBusy(true);
-    try {
-      await downloadSinglePdf(activeRm);
-      toast('PDF downloaded', 'success');
-    } catch (e) {
-      toast('PDF generation failed: ' + (e instanceof Error ? e.message : String(e)), 'err');
-    } finally {
-      setPdfBusy(false);
-    }
-  }
-
   async function downloadServer() {
     if (!activeRm) return;
     setServerBusy(true);
     try {
       await downloadServerPdf(activeRm);
-      toast('Server PDF downloaded', 'success');
+      toast('PDF downloaded', 'success');
     } catch (e) {
-      toast('Server PDF failed: ' + (e instanceof Error ? e.message : String(e)), 'err');
+      toast('PDF generation failed: ' + (e instanceof Error ? e.message : String(e)), 'err');
     } finally {
       setServerBusy(false);
     }
   }
 
-  function copyHtml() {
+  function handleDownloadHtml() {
     if (!activeRm) return;
-    navigator.clipboard.writeText(generateEmailHtml(activeRm).emailHtml).then(() => toast('HTML copied', 'success'));
+    downloadHtml(activeRm);
+    toast('HTML downloaded', 'success');
   }
 
   function copyText() {
@@ -175,14 +162,11 @@ export default function PreviewPage() {
              </div>
              {activeRm && (
                <div className="pt-actions">
-                 <button className="pt-btn" onClick={downloadPdf} disabled={pdfBusy}>
-                   {pdfBusy ? 'Preparing…' : 'Download PDF (browser)'}
-                 </button>
                  <button className="pt-btn" onClick={downloadServer} disabled={serverBusy}>
-                   {serverBusy ? 'Preparing…' : 'Download PDF (server)'}
+                   {serverBusy ? 'Preparing…' : 'Download PDF'}
                  </button>
-                 <button className="pt-btn" onClick={copyHtml}>
-                   Copy HTML
+                 <button className="pt-btn" onClick={handleDownloadHtml}>
+                   Download HTML
                  </button>
                  <button className="pt-btn" onClick={copyText}>
                    Copy plain text

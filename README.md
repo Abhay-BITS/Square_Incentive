@@ -7,27 +7,24 @@ then preview and download a PDF breakdown for every RM.
 
 1. **Upload** (`/`): drop or select an `.xlsx` with `RMs` and `Deals` sheets.
 2. **Validation** (`/validate`): row counts plus any errors or warnings.
-3. **Preview** (`/preview`): search and filter recipients, see each PDF, copy its HTML or
-   plain text, and download a single PDF.
+3. **Preview** (`/preview`): search and filter recipients, see each breakdown, download its PDF or
+   HTML, or copy the plain text.
 4. **Export** (`/export`): download every PDF as one ZIP, or the raw HTML files.
 
-## Two ways to generate PDFs
+## PDF generation
 
-Both are available on the site so they can be compared.
+PDFs are generated on the server with [QuestPDF](https://www.questpdf.com), which redraws
+the template with the same wording and colours. The site calls `POST /api/pdf/single` (one
+RM) and `POST /api/pdf/zip` (an array of RMs). Both take the same RM objects the frontend
+already holds (RM fields plus the calculation results), so no calculation logic is
+duplicated in C#. The renderer is in [backend/Pdf/Renderer.cs](backend/Pdf/Renderer.cs);
+fonts (Inter and JetBrains Mono, both SIL OFL) are in `backend/Pdf/fonts`.
 
-| Option | Where it runs | How |
-|---|---|---|
-| **Browser** | The visitor's browser | The HTML template is drawn to a canvas with `html2canvas`, then sliced into `jsPDF` pages. Image based. |
-| **Server** | The ASP.NET Core backend | [QuestPDF](https://www.questpdf.com) redraws the same template with the same wording and colours. Real text PDFs, faster for large batches. |
+Rough numbers on a laptop: 500 RMs takes about 34 seconds and produces a ZIP of about
+90 MB (each PDF embeds its fonts).
 
-The server version is `POST /api/pdf/single` (one RM) and `POST /api/pdf/zip` (an array of
-RMs). Both take the same RM objects the frontend already holds (RM fields plus the
-calculation results), so no calculation logic is duplicated in C#. The renderer is in
-[backend/Pdf/Renderer.cs](backend/Pdf/Renderer.cs); fonts (Inter and JetBrains Mono, both
-SIL OFL) are in `backend/Pdf/fonts`.
-
-Rough numbers on a laptop: 500 RMs takes about 34 seconds on the server and produces a
-ZIP of about 90 MB (each PDF embeds its fonts).
+The HTML version of each breakdown is built in the browser and can be downloaded per RM
+from the preview page, or as a ZIP from the export page.
 
 ## Where the calculation lives
 
