@@ -65,11 +65,21 @@ backend. The frontend is not affected.
 
 ## Deploying
 
-- **Backend** (Render Web Service): root `backend/`, build `dotnet publish -c Release -o out`,
-  start `dotnet out/IncentiveTool.Api.dll`. Set `CORS_ORIGINS` to the frontend's URL.
-  Font files are copied on publish.
-- **Frontend** (Render Static Site): root `frontend/`, build `npm run build`, publish
-  directory `dist/`. Set `VITE_API_BASE_URL` to the backend's URL.
+The frontend is static and the backend is a .NET service, so they deploy separately and the
+frontend must be told where the backend is.
+
+1. **Backend** (Render Web Service, environment `Docker`): root directory `backend/`. The
+   included `Dockerfile` builds and runs it. Set the environment variable `CORS_ORIGINS` to
+   the frontend's URL, for example `https://squareincentive.vercel.app` (comma separated
+   for several).
+2. **Frontend** (Vercel): root directory `frontend/`. Set `VITE_API_BASE_URL` to the
+   backend's public URL, for example `https://your-service.onrender.com`, then redeploy.
+   Vite reads this at build time, so changing it needs a new build. `vercel.json` makes
+   page refreshes on `/validate`, `/preview` and `/export` work.
+
+Without step 2 the site tries `http://localhost:5080` and shows "Could not parse file:
+Failed to fetch". Free Render services sleep when idle, so the first request after a
+break can take about a minute.
 
 ## Licensing note
 
