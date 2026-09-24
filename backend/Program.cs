@@ -1,4 +1,15 @@
 using IncentiveTool.Api.Excel;
+using QuestPDF.Drawing;
+using QuestPDF.Infrastructure;
+
+// QuestPDF Community license (free for open-source projects). Review the terms at
+// https://www.questpdf.com/license/ before any commercial use.
+QuestPDF.Settings.License = LicenseType.Community;
+foreach (var font in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Pdf", "fonts"), "*.ttf"))
+{
+    using var stream = File.OpenRead(font);
+    FontManager.RegisterFont(stream);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 

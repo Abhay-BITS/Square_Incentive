@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { fmtINR } from '../lib/engine.js';
 import { downloadHtmlZip, downloadPdfZip } from '../lib/pdfExport';
+import { downloadServerPdfZip } from '../lib/serverPdf';
 import { useApp } from '../context/AppContext';
 import { Layout } from '../components/Layout';
 
@@ -9,6 +10,7 @@ export default function ExportPage() {
   const { rms, toast } = useApp();
   const navigate = useNavigate();
   const [pdfBusy, setPdfBusy] = useState<string | null>(null);
+  const [serverBusy, setServerBusy] = useState(false);
 
   const diag = useMemo(() => {
     const buckets = { positive: 0, zero: 0, held: 0, negative: 0 };
@@ -39,6 +41,18 @@ export default function ExportPage() {
     }
   }
 
+  async function handleServerZip() {
+    setServerBusy(true);
+    try {
+      await downloadServerPdfZip(rms);
+      toast(`Generated ${rms.length} PDFs on the server`, 'success');
+    } catch (e) {
+      toast('Server PDF failed: ' + (e instanceof Error ? e.message : String(e)), 'err');
+    } finally {
+      setServerBusy(false);
+    }
+  }
+
   async function handleDownloadHtmlZip() {
     try {
       await downloadHtmlZip(rms);
@@ -57,7 +71,7 @@ export default function ExportPage() {
 
          <div className="export-option" style={{ borderColor: 'var(--navy-dark)', background: '#FCFDFF' }}>
            <div className="export-option-body">
-             <h3>ZIP of PDFs</h3>
+             <h3>ZIP of PDFs (browser)</h3>
              <p>
                One PDF per RM, filename <code>EmployeeCode_MonthDD.pdf</code>.
              </p>
@@ -68,7 +82,25 @@ export default function ExportPage() {
                  <span className="spinner"></span> {pdfBusy}
                </>
              ) : (
-               '⬇ Download PDFs (ZIP)'
+               'Download PDFs (browser ZIP)'
+             )}
+           </button>
+         </div>
+
+         <div className="export-option">
+           <div className="export-option-body">
+             <h3>ZIP of PDFs (server)</h3>
+             <p>
+               Same file names, generated on the server with QuestPDF instead of in your browser. Faster for large batches, with selectable text.
+             </p>
+           </div>
+           <button className="btn primary" onClick={handleServerZip} disabled={serverBusy}>
+             {serverBusy ? (
+               <>
+                 <span className="spinner"></span> Generating…
+               </>
+             ) : (
+               'Download PDFs (server ZIP)'
              )}
            </button>
          </div>

@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { fmtINR, generateEmailHtml, generatePlainText } from '../lib/engine.js';
 import type { Rm } from '../lib/engine.js';
 import { downloadSinglePdf } from '../lib/pdfExport';
+import { downloadServerPdf } from '../lib/serverPdf';
 import { useApp } from '../context/AppContext';
 import { Layout } from '../components/Layout';
 
@@ -34,6 +35,7 @@ export default function PreviewPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [serverBusy, setServerBusy] = useState(false);
 
   useEffect(() => {
     if (rms.length > 0 && !activeRmId) setActiveRmId(rms[0].id);
@@ -71,6 +73,19 @@ export default function PreviewPage() {
       toast('PDF generation failed: ' + (e instanceof Error ? e.message : String(e)), 'err');
     } finally {
       setPdfBusy(false);
+    }
+  }
+
+  async function downloadServer() {
+    if (!activeRm) return;
+    setServerBusy(true);
+    try {
+      await downloadServerPdf(activeRm);
+      toast('Server PDF downloaded', 'success');
+    } catch (e) {
+      toast('Server PDF failed: ' + (e instanceof Error ? e.message : String(e)), 'err');
+    } finally {
+      setServerBusy(false);
     }
   }
 
@@ -161,7 +176,10 @@ export default function PreviewPage() {
              {activeRm && (
                <div className="pt-actions">
                  <button className="pt-btn" onClick={downloadPdf} disabled={pdfBusy}>
-                   {pdfBusy ? 'Preparing…' : 'Download PDF'}
+                   {pdfBusy ? 'Preparing…' : 'Download PDF (browser)'}
+                 </button>
+                 <button className="pt-btn" onClick={downloadServer} disabled={serverBusy}>
+                   {serverBusy ? 'Preparing…' : 'Download PDF (server)'}
                  </button>
                  <button className="pt-btn" onClick={copyHtml}>
                    Copy HTML
