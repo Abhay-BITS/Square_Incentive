@@ -24,13 +24,15 @@ Rough numbers on a laptop: 500 RMs takes about 34 seconds and produces a ZIP of 
 90 MB (each PDF is roughly 180 KB because it embeds its fonts). The ZIP is streamed from the
 server one PDF at a time, so memory stays low (about 190 MB while producing 1,667 PDFs).
 
-Large exports are split automatically. The frontend generates a small sample to estimate
-the total size and, if it would pass about 450 MB, downloads several ZIP files
-(`..._part1of3.zip`, and so on) from the single button. 5,000 RMs comes to about 0.9 GB, so
-3 files, and each part takes a couple of minutes to generate.
+Large exports run as many small requests (25 RMs each) instead of one long one, so a slow or
+sleeping server never hits a connection timeout. The page shows progress with a time
+estimate, retries a failed batch, and collects the PDFs into ZIP files of at most about
+450 MB (`..._part1.zip`, `..._part2.zip`, and so on), saving each as soon as it fills.
 
-The HTML version of each breakdown is built in the browser and can be downloaded per RM
-from the preview page, or as a ZIP from the export page.
+Speed depends on the server. On a laptop a PDF takes roughly 0.07 seconds. On Render's free
+plan (a fraction of one CPU) it took about 1.1 seconds each in a test, so 5,000 RMs would
+take well over an hour there. A paid instance with more CPU is the practical fix for that
+volume.
 
 ## Where the calculation lives
 

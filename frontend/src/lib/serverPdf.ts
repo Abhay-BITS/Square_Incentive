@@ -1,4 +1,5 @@
 import { saveAs } from 'file-saver';
+import JSZip from 'jszip';
 import type { Rm } from './engine.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5080';
@@ -28,39 +29,86 @@ export async function downloadServerPdf(rm: Rm): Promise<void> {
   saveAs(blob, `${rm.empCode}_${rm.calc.ddShort}DD.pdf`);
 }
 
-// Each ZIP part is kept under this size so no single download (or the memory the browser
-// needs to hold it) gets too large. Parts are downloaded one after another from one click.
+// Exports run as many small requests instead of one long one, so a slow or sleepy server
+// never hits a connection timeout, progress is visible, and a failed batch is retried.
+// Finished PDFs are gathered into ZIP files kept under MAX_PART_BYTES and each one is saved
+// as soon as it fills, which also keeps browser memory bounded.
+const BATCH_SIZE = 25;
 const MAX_PART_BYTES = 450 * 1024 * 1024;
-const PROBE_COUNT = 20;
-const SAFETY = 1.25;
+const RETRIES = 2;
 
 function stamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 }
 
+async function postWithRetry(path: string, body: unknown): Promise<Blob> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= RETRIES; attempt++) {
+    try {
+      return await post(path, body);
+    } catch (e) {
+      lastError = e;
+      await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
+function formatEta(ms: number): string {
+  const min = Math.round(ms / 60000);
+  if (min < 1) return 'less than a minute left';
+  if (min < 60) return `about ${min} min left`;
+  return `about ${Math.floor(min / 60)} h ${min % 60} min left`;
+}
+
 export async function downloadServerPdfZip(rms: Rm[], onProgress?: (message: string) => void): Promise<number> {
   const ts = stamp();
 
-  if (rms.length <= PROBE_COUNT) {
+  if (rms.length <= BATCH_SIZE) {
     onProgress?.('Generating…');
-    saveAs(await post('/api/pdf/zip', rms), `incentive_pdfs_server_${ts}.zip`);
+    saveAs(await postWithRetry('/api/pdf/zip', rms), `incentive_pdfs_server_${ts}.zip`);
     return 1;
   }
 
-  // Generate a small sample first to learn the average PDF size, then decide how many
-  // parts the full export needs.
-  onProgress?.('Estimating size…');
-  const probe = await post('/api/pdf/zip', rms.slice(0, PROBE_COUNT));
-  const estimatedTotal = (probe.size / PROBE_COUNT) * SAFETY * rms.length;
-  const parts = Math.max(1, Math.ceil(estimatedTotal / MAX_PART_BYTES));
-  const perPart = Math.ceil(rms.length / parts);
+  let part = new JSZip();
+  let partBytes = 0;
+  let savedParts = 0;
+  const started = Date.now();
 
-  for (let i = 0; i < parts; i++) {
-    onProgress?.(parts === 1 ? 'Generating…' : `Generating part ${i + 1} of ${parts}…`);
-    const chunk = rms.slice(i * perPart, (i + 1) * perPart);
-    const blob = await post('/api/pdf/zip', chunk);
-    const suffix = parts === 1 ? '' : `_part${i + 1}of${parts}`;
-    saveAs(blob, `incentive_pdfs_server_${ts}${suffix}.zip`);
+  async function flush() {
+    if (partBytes === 0) return;
+    savedParts++;
+    const blob = await part.generateAsync({ type: 'blob', compression: 'STORE' });
+    saveAs(blob, `incentive_pdfs_server_${ts}_part${savedParts}.zip`);
+    part = new JSZip();
+    partBytes = 0;
   }
-  return parts;
+
+  try {
+    for (let i = 0; i < rms.length; i += BATCH_SIZE) {
+      const done = i;
+      const elapsed = Date.now() - started;
+      const eta = done > 0 ? ` (${formatEta((elapsed / done) * (rms.length - done))})` : '';
+      onProgress?.(`Generating ${done} of ${rms.length} PDFs${eta}`);
+
+      const batch = await JSZip.loadAsync(await postWithRetry('/api/pdf/zip', rms.slice(i, i + BATCH_SIZE)));
+      for (const name of Object.keys(batch.files)) {
+        const data = await batch.files[name].async('uint8array');
+        if (partBytes + data.length > MAX_PART_BYTES) await flush();
+        part.file(name, data, { compression: 'STORE' });
+        partBytes += data.length;
+      }
+    }
+    onProgress?.('Saving…');
+    await flush();
+  } catch (e) {
+    if (savedParts > 0 || partBytes > 0) {
+      await flush();
+      throw new Error(
+        `${e instanceof Error ? e.message : String(e)}. The PDFs generated so far were saved in ${savedParts} ZIP file(s); run the export again for the rest.`
+      );
+    }
+    throw e;
+  }
+  return savedParts;
 }

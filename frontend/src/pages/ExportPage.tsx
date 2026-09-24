@@ -61,7 +61,7 @@ export default function ExportPage() {
            <div className="export-option-body">
              <h3>ZIP of PDFs</h3>
              <p>
-               One PDF per RM, filename <code>EmployeeCode_MonthDD.pdf</code>. Very large batches are split into several ZIP files automatically, so your browser may ask to allow multiple downloads.
+               One PDF per RM, filename <code>EmployeeCode_MonthDD.pdf</code>. Large exports run in small batches with a progress counter and are split into several ZIP files automatically, so your browser may ask to allow multiple downloads. On a free server this can take a long time for thousands of RMs, so keep the tab open.
              </p>
            </div>
            <button className="btn primary" onClick={handleServerZip} disabled={zipStatus !== null}>
