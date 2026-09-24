@@ -1,6 +1,7 @@
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Layout } from '../components/Layout';
+import { BackLink } from '../components/BackLink';
 
 export default function ValidationPage() {
   const { rms, issues, joinedCount } = useApp();
@@ -14,7 +15,8 @@ export default function ValidationPage() {
     <Layout>
      <section className="view active">
        <div className="validation">
-         <h1>File validated</h1>
+         <BackLink to="/">Upload a different file</BackLink>
+        <h1>File validated</h1>
          <p className="val-lede">
            {errCount > 0
              ? 'Fix the errors below before proceeding.'

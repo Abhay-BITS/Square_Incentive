@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { fmtINR } from '../lib/engine.js';
 import { downloadHtmlZip } from '../lib/pdfExport';
 import { downloadServerPdfZip } from '../lib/serverPdf';
 import { useApp } from '../context/AppContext';
 import { Layout } from '../components/Layout';
+import { BackLink } from '../components/BackLink';
 
 export default function ExportPage() {
   const { rms, toast } = useApp();
-  const navigate = useNavigate();
   const [serverBusy, setServerBusy] = useState(false);
 
   const diag = useMemo(() => {
@@ -53,7 +53,8 @@ export default function ExportPage() {
     <Layout>
      <section className="view active">
        <div className="export">
-         <h1>Bulk export</h1>
+         <BackLink to="/preview">Back to preview</BackLink>
+        <h1>Bulk export</h1>
          <p className="lede">Pick the format that matches how you'll distribute these.</p>
 
          <div className="export-option">
@@ -119,11 +120,6 @@ export default function ExportPage() {
            </div>
          </div>
 
-         <div style={{ marginTop: 24 }}>
-           <button className="btn ghost" onClick={() => navigate('/preview')}>
-             ← Back to preview
-           </button>
-         </div>
        </div>
      </section>
     </Layout>

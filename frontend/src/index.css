@@ -841,3 +841,21 @@ html, body {
   .hero { gap: 36px; }
   .hero h1 { font-size: 34px; }
 }
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 18px -8px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 140ms;
+}
+.back-link:hover { color: var(--ink); background: var(--border-soft); }
