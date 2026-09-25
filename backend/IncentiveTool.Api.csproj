@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <None Include="Pdf\fonts\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Pdf\logo-white.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

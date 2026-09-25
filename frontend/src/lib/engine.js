@@ -1,6 +1,7 @@
 // Verbatim extract (lines 1358-2646) from Incentive_PDF_Tool.html - the calculation
 // engine and email/PDF template generator. See the note at the bottom of this file.
 
+const LOGO_WHITE = 'data:image/png;base64,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';
 const SALARY_MONTHS = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
 const MONTH_NAMES = { Apr:'April', May:'May', Jun:'June', Jul:'July', Aug:'August', Sep:'September', Oct:'October', Nov:'November', Dec:'December', Jan:'January', Feb:'February', Mar:'March' };
 const MONTH_NUM = { Apr:4, May:5, Jun:6, Jul:7, Aug:8, Sep:9, Oct:10, Nov:11, Dec:12, Jan:1, Feb:2, Mar:3 };
@@ -499,7 +500,7 @@ function getHeroConf(rm, c, T, month) {
       bg: T.GREEN_SOFT, border: T.GREEN,
       label: 'YOUR ' + monthUp + ' DOLLAR DAY INCENTIVE',
       big: fmtINRnoSym(totalForCycle),
-      formula: fmtINR(totalForCycle) + ' = ' + fmtINR(cashDue) + ' (Cash to bank, 80%) + ' + fmtINR(esopForDue) + ' (ESOP, 20%)',
+      formula: fmtINR(totalForCycle) + ' = ' + fmtINR(cashDue) + ' (Cash in bank, 80%) + ' + fmtINR(esopForDue) + ' (ESOP, 20%)',
     };
   }
   if (c.overallScenario === 'held_no_crm') {
@@ -806,7 +807,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           <th style="padding: 9px 10px; text-align: right; font-size: 11px; color: white; font-family: ${T.FONT};">Deal Revenue</th>
           <th style="padding: 9px 10px; text-align: center; font-size: 11px; color: white; font-family: ${T.FONT};">Deal Month</th>
           <th style="padding: 9px 10px; text-align: center; font-size: 11px; color: white; font-family: ${T.FONT};">Stage</th>
-          <th style="padding: 9px 10px; text-align: center; font-size: 11px; color: white; font-family: ${T.FONT};">Type</th>
+          <th style="padding: 9px 10px; text-align: center; font-size: 11px; color: white; font-family: ${T.FONT};">Project Type</th>
           <th style="padding: 9px 10px; text-align: right; font-size: 11px; color: white; font-family: ${T.FONT};">Collection %</th>
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -900,7 +901,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   const step3Html = rm.deals.length === 0 ? '' :
     sectionH(3, 'Both Incentives - Provisional and Confirmed') + `<tr><td style="padding: 4px 0 12px 0;">
       ${bulletList([
-        `Two incentives are computed side by side: <strong>Provisional</strong> (Counted / Confirmed / Collected deals) and <strong>Confirmed</strong> (Confirmed and Collected deals).`
+        `Two incentives are computed side by side: <strong>Provisional</strong> (Counted + Confirmed + Collected deals) and <strong>Confirmed</strong> (Confirmed and Collected deals).`
       ])}
       ${provBlock}
       ${confBlock}
@@ -918,7 +919,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     const confFlow = flowChart([
       { label: 'Confirmed Incentive', sub: fmtINR(c.confIncentive) },
       { label: 'Deal Incentive Share', sub: 'Incentive \u00D7 Rev\u00F7Total' },
-      { label: 'Payable', sub: 'max(50%, Collection %)' }
+      { label: 'Payable', sub: 'Payout will be based on whichever is higher: 50% or actual collection.' }
     ]);
 
     // Provisional block: flow + formula + explanation
@@ -931,8 +932,8 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           'Deal Incentive Share = Provisional Incentive \u00D7 (Deal Revenue \u00F7 Total Provisional Incentive Deal Revenue)',
           '',
           '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
-          'Focus deal &nbsp;&nbsp;&nbsp;\u2192 Provisional Payable = <span style="color: ' + T.GOLD + ';">25%</span> \u00D7 Deal Incentive Share',
-          'Non-Focus deal \u2192 Provisional Payable = <span style="color: ' + T.GOLD + ';">\u20B90</span>'
+          'For Focus deal &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\u2192 Provisional Payable = <span style="color: ' + T.GOLD + ';">25%</span> \u00D7 Deal Incentive Share',
+          'For Non-Focus deal \u2192 Provisional Payable = <span style="color: ' + T.GOLD + ';">\u20B90</span>'
         ])}
       `;
     }
@@ -946,7 +947,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           'Deal Incentive Share = Confirmed Incentive \u00D7 (Deal Revenue \u00F7 Total Confirmed Incentive Deal Revenue)',
           '',
           '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
-          'Confirmed Payable = <span style="color: ' + T.GOLD + ';">max(50%, Collection %)</span> \u00D7 Deal Incentive Share'
+          'Payout will be based on whichever is higher: 50% or actual collection.'
         ])}
       `;
     }
@@ -1054,7 +1055,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       <td style="padding: 10px; font-family: ${T.MONO}; font-size: 13px; font-weight: 700; color: ${T.ORANGE_DEEP}; text-align: right;">${fmtINR(c.fy27EsopPayable)}</td>
     </tr>`;
     const breakupTable = c.fy27Payable > 0 ? `
-      <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 20px 0 6px 0; font-weight: 700;">Cash &amp; ESOP breakup <span style="font-size: 11px; color: ${T.INK_SOFT}; font-weight: 500;">- 80% cash to bank, 20% ESOP per deal</span></p>
+      <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 20px 0 6px 0; font-weight: 700;">Cash &amp; ESOP breakup <span style="font-size: 11px; color: ${T.INK_SOFT}; font-weight: 500;">- 80% cash in bank, 20% ESOP per deal</span></p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; border: 1px solid ${T.BORDER}; border-radius: 6px; overflow: hidden;">
         <thead><tr style="background: ${T.NAVY};">
           <th style="padding: 9px 10px; text-align: left; font-size: 10.5px; color: white; font-family: ${T.FONT};">TCF ID</th>
@@ -1099,32 +1100,28 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
 
 
   // ============ STEP 5: Due Incentive - CASH ONLY ============
-  // Due = FY27 Cash Payable (80% of FY27) + Prior Period Payable (already cash) - Already Paid (cash)
+  // Due = FY27 Monetary Payable (80% of FY27) + Prior Period Payable (already cash) - Already Paid (cash)
   const dueColor = c.due < 0 ? T.RED_DEEP : (c.due > 0 ? T.GREEN_DEEP : T.INK);
   const hasBackYears = c.backYear && c.backYear.total > 0;
   const cumulativeBox = hasBackYears
     ? `<div style="font-family: ${T.MONO}; font-size: 13px; color: ${T.INK}; padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.NAVY}; border-radius: 3px; line-height: 1.7;">
-        FY27 Cash Payable (80% of \u20B9${fmtINRnoSym(c.fy27Payable)}) = <strong>${fmtINR(c.fy27CashPayable)}</strong><br>
-        Prior Period Payable (cash) = <strong>${fmtINR(c.backYear.total)}</strong><br>
-        Cumulative Cash Payable = ${fmtINR(c.fy27CashPayable)} + ${fmtINR(c.backYear.total)} = <strong>${fmtINR(c.cumulativeCash)}</strong><br>
-        Total Already Paid (cash) = <strong>${fmtINR(c.alreadyPaid)}</strong><br>
-        <strong>Due Incentive (cash) = ${fmtINR(c.cumulativeCash)} \u2212 ${fmtINR(c.alreadyPaid)} = <span style="color:${dueColor};">${fmtINR(c.due)}</span></strong>
+        FY27 Monetary Payable (80% of \u20B9${fmtINRnoSym(c.fy27Payable)}) = <strong>${fmtINR(c.fy27CashPayable)}</strong><br>
+        Prior Period Payable = <strong>${fmtINR(c.backYear.total)}</strong><br>
+        Cumulative Monetary Payable = ${fmtINR(c.fy27CashPayable)} + ${fmtINR(c.backYear.total)} = <strong>${fmtINR(c.cumulativeCash)}</strong><br>
+        Total Already Paid = <strong>${fmtINR(c.alreadyPaid)}</strong><br>
+        <strong>Due Incentive (cash in bank) = ${fmtINR(c.cumulativeCash)} \u2212 ${fmtINR(c.alreadyPaid)} = <span style="color:${dueColor};">${fmtINR(c.due)}</span></strong>
       </div>`
     : `<div style="font-family: ${T.MONO}; font-size: 13px; color: ${T.INK}; padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.NAVY}; border-radius: 3px; line-height: 1.7;">
-        FY27 Cash Payable (80% of \u20B9${fmtINRnoSym(c.fy27Payable)}) = <strong>${fmtINR(c.fy27CashPayable)}</strong><br>
-        Total Already Paid (cash) = <strong>${fmtINR(c.alreadyPaid)}</strong><br>
-        <strong>Due Incentive (cash) = ${fmtINR(c.fy27CashPayable)} \u2212 ${fmtINR(c.alreadyPaid)} = <span style="color:${dueColor};">${fmtINR(c.due)}</span></strong>
+        FY27 Monetary Payable (80% of \u20B9${fmtINRnoSym(c.fy27Payable)}) = <strong>${fmtINR(c.fy27CashPayable)}</strong><br>
+        Total Already Paid = <strong>${fmtINR(c.alreadyPaid)}</strong><br>
+        <strong>Due Incentive (cash in bank) = ${fmtINR(c.fy27CashPayable)} \u2212 ${fmtINR(c.alreadyPaid)} = <span style="color:${dueColor};">${fmtINR(c.due)}</span></strong>
       </div>`;
-  const nettingBullet = hasBackYears
-    ? `Only the <strong>cash portion</strong> (80%) of your FY27 payable flows into Due Incentive. Prior Period Payable is already a cash amount. Everything nets against Total Already Paid (also cash).`
-    : `Only the <strong>cash portion</strong> (80%) of your FY27 payable flows into Due Incentive. This nets against Total Already Paid (also cash).`;
-  const step5Html = sectionH(5, 'Due Incentive (cash) after netting Already Paid') + `<tr><td style="padding: 4px 0 12px 0;">
-    ${bulletList([nettingBullet])}
+  const step5Html = sectionH(5, 'Due Incentive (cash in bank) after netting Already Paid') + `<tr><td style="padding: 4px 0 12px 0;">
     ${cumulativeBox}
     ${c.due < 0 ? `
       <div style="margin-top: 10px; padding: 12px 14px; background: ${T.RED_SOFT}; border-left: 3px solid ${T.RED}; border-radius: 3px;">
         <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 0;">
-          <strong style="color: ${T.RED_DEEP};">No clawback.</strong> Even though Due is negative, nothing is recovered. The ${fmtINR(c.alreadyPaid)} you have been paid stays. Disbursement resumes automatically the next cycle your Cumulative Cash Payable grows past ${fmtINR(c.alreadyPaid)}.
+          <strong style="color: ${T.RED_DEEP};">No clawback.</strong> Even though Due is negative, nothing is recovered. The ${fmtINR(c.alreadyPaid)} you have been paid stays. Disbursement resumes automatically the next cycle your Cumulative Monetary Payable grows past ${fmtINR(c.alreadyPaid)}.
         </p>
       </div>
     ` : ''}
@@ -1159,16 +1156,11 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     // Reverse-calc'd Total Incentive for this disbursement = Due / 0.80
     const cashThisCycle = c.dueForRelease;
     const esopThisCycle = cashThisCycle * 0.25;
-    const totalThisCycle = cashThisCycle + esopThisCycle;
     step7Html = sectionH(7, 'This Dollar Day disbursement') + `<tr><td style="padding: 4px 0 20px 0;">
-      ${bulletList([
-        `Cash to bank = your <strong>Due Incentive</strong> (already cash-only).`,
-        `ESOP = 25% of cash (equivalent to 20% of total incentive) - reverse-calculated since My Incentive numbers are cash-only.`
-      ])}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; margin-top: 10px;">
         <tr>
           <td width="49%" style="background: ${T.GREEN_SOFT}; border: 1px solid ${T.GREEN}; border-radius: 6px; padding: 16px; text-align: center;">
-            <div style="font-family: ${T.FONT}; font-size: 10.5px; color: ${T.GREEN_DEEP}; font-weight: 700; letter-spacing: 0.8px; margin-bottom: 4px;">CASH TO BANK</div>
+            <div style="font-family: ${T.FONT}; font-size: 10.5px; color: ${T.GREEN_DEEP}; font-weight: 700; letter-spacing: 0.8px; margin-bottom: 4px;">CASH IN BANK</div>
             <div style="font-family: ${T.MONO}; font-size: 22px; font-weight: 700; color: ${T.GREEN_DEEP};">${fmtINR(cashThisCycle)}</div>
             <div style="font-family: ${T.FONT}; font-size: 11px; color: ${T.INK_SOFT}; margin-top: 4px;">80% of total incentive</div>
           </td>
@@ -1179,12 +1171,6 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
             <div style="font-family: ${T.FONT}; font-size: 11px; color: ${T.INK_SOFT}; margin-top: 4px;">20% of total incentive</div>
           </td>
         </tr>
-        <tr><td colspan="3" style="padding-top: 12px;">
-          <div style="background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.NAVY}; padding: 12px 14px; border-radius: 3px; font-family: ${T.MONO}; font-size: 12.5px; color: ${T.INK}; line-height: 1.6;">
-            <strong>Total incentive this cycle = ${fmtINR(totalThisCycle)}</strong><br>
-            = ${fmtINR(cashThisCycle)} (Cash, 80%) + ${fmtINR(esopThisCycle)} (ESOP, 20%)
-          </div>
-        </td></tr>
       </table>
     </td></tr>`;
   }
@@ -1205,10 +1191,12 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     <tr><td align="center" style="padding: 24px 12px;">
       <table role="presentation" width="720" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; max-width: 720px;">
 
-        <tr><td class="pdf-section-start" style="background: ${T.NAVY}; padding: 18px 28px;">
+        <tr><td class="pdf-section-start" style="background: #000000; padding: 18px 28px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
             <tr>
-              <td style="font-family: ${T.FONT}; font-size: 15px; font-weight: 700; color: white; letter-spacing: -0.01em;">Square Yards</td>
+              <td>
+                <img src="${LOGO_WHITE}" alt="Square Yards" height="34" style="display: block; height: 34px; width: auto;">
+              </td>
               <td style="text-align: right; font-family: ${T.FONT}; font-size: 11px; color: rgba(255,255,255,0.7); font-weight: 500; white-space: nowrap;">Incentive Team \u00B7 Dollar Day ${escapeHtml(rm.ddDate)}</td>
             </tr>
           </table>
@@ -1232,12 +1220,6 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
         ${buildFY27Block(c, rangeLabel, T, stepsHtmlFY27)}
         ${buildPriorPeriodsCard(c, T)}
 
-        <tr><td style="padding: 22px 28px 0 28px;">
-          <div style="font-family: ${T.MONO}; font-size: 10.5px; font-weight: 700; color: ${T.MUTED}; letter-spacing: 1.2px; text-transform: uppercase; padding-bottom: 8px; border-bottom: 1px solid ${T.BORDER_STRONG};">
-            Due Incentive \u00B7 <span style="color: ${T.NAVY};">final cash calculation</span>
-          </div>
-        </td></tr>
-
         <tr><td style="padding: 0 28px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
             ${stepsHtmlDue}
@@ -1245,7 +1227,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
         </td></tr>
 
         <tr><td class="pdf-section-start" style="padding: 24px 28px 24px 28px;">
-          <div style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; line-height: 1.6; margin-bottom: 10px;">If you still have doubts, reach out to <a href="mailto:incentive@squareyards.com" style="color: ${T.NAVY}; font-weight: 700; text-decoration: none;">incentive@squareyards.com</a>.</div>
+          <div style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; line-height: 1.6; margin-bottom: 10px;">If you still have any doubts, please reach out to your T3 or P&amp;L head first. If they remain unresolved, write to <a href="mailto:incentive@squareyards.com" style="color: ${T.NAVY}; font-weight: 700; text-decoration: none;">incentive@squareyards.com</a>.</div>
           <div style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK_SOFT};">- <strong style="color: ${T.INK};">Incentive Team, Square Yards</strong></div>
         </td></tr>
 
@@ -1266,7 +1248,7 @@ function generatePlainText(rm) {
   lines.push(`YTD Salary Cost and deals from ${rangeLabel} considered.`);
   lines.push('');
   if (c.overallScenario === 'positive' || c.overallScenario === 'provisional_only') {
-    lines.push(`This-cycle cash to bank = ${fmtINR(c.dueForRelease)} (Due Incentive); ESOP = ${fmtINR(c.dueForRelease * 0.25)} (reverse-calc from cash)`);
+    lines.push(`This-cycle cash in bank = ${fmtINR(c.dueForRelease)} (Due Incentive); ESOP = ${fmtINR(c.dueForRelease * 0.25)} (reverse-calc from cash)`);
   } else if (c.overallScenario === 'held_no_crm') {
     lines.push(`Held pending CRM approval: ${fmtINR(c.due)}`);
   } else {
@@ -1281,7 +1263,7 @@ function generatePlainText(rm) {
   lines.push(`Already Paid = ${fmtINR(c.alreadyPaid)}`);
   lines.push(`Due = ${fmtINR(c.due)}`);
   lines.push('');
-  lines.push('If you still have doubts, reach out to incentive@squareyards.com');
+  lines.push('If you still have any doubts, please reach out to your T3 or P&L head first. If they remain unresolved, write to incentive@squareyards.com.');
   lines.push('');
   lines.push('- Incentive Team, Square Yards');
   return lines.join('\n');

@@ -18,6 +18,8 @@ public class Renderer
     const float PX = 0.68f;
     static float P(double px) => (float)(px * PX);
 
+    static readonly byte[] LogoWhite = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Pdf", "logo-white.png"));
+
     readonly JsonElement rm, c;
     readonly List<JsonElement> deals, results;
     readonly string month, range, scenario;
@@ -75,7 +77,7 @@ public class Renderer
         });
 
     static void SectionH(ColumnDescriptor col, int n, string title) =>
-        col.Item().PaddingTop(P(24)).PaddingBottom(P(8)).EnsureSpace(80).Row(r =>
+        col.Item().PaddingTop(P(18)).PaddingBottom(P(6)).EnsureSpace(80).Row(r =>
         {
             r.AutoItem().Background(NAVY).PaddingVertical(2.5f).PaddingHorizontal(6)
                 .Text($"STEP {n}").FontFamily(MONO).Bold().FontSize(P(11.5)).FontColor(Colors.White);
@@ -117,9 +119,10 @@ public class Renderer
             page.DefaultTextStyle(t => t.FontFamily(SANS).FontSize(P(13)).FontColor(INK));
             page.Content().Background(Colors.White).Column(card =>
             {
-                card.Item().Background(NAVY).PaddingVertical(P(18)).PaddingHorizontal(P(28)).Row(r =>
+                card.Item().Background("#000000").PaddingVertical(P(18)).PaddingHorizontal(P(28)).Row(r =>
                 {
-                    r.RelativeItem().Text("Square Yards").Bold().FontSize(P(15)).FontColor(Colors.White);
+                    r.ConstantItem(P(85)).Height(P(34)).Image(LogoWhite).FitArea();
+                    r.RelativeItem();
                     r.AutoItem().AlignMiddle().Text($"Incentive Team · Dollar Day {rm.Str("ddDate")}").Medium().FontSize(P(11)).FontColor("#B3B7C7");
                 });
                 card.Item().PaddingHorizontal(P(28)).Column(body =>
@@ -130,17 +133,11 @@ public class Renderer
                     body.Item().PaddingTop(P(8)).Text(t => Rich(t, $"Below is your incentive breakdown for **{month} Dollar Day**.", 14));
                     Fy27Block(body);
                     PriorCard(body);
-                    body.Item().PaddingTop(P(22)).BorderBottom(0.75f).BorderColor(BORDER_STRONG).PaddingBottom(P(8)).Text(t =>
-                    {
-                        t.Span("DUE INCENTIVE · ").FontFamily(MONO).Bold().FontSize(P(10.5)).FontColor(MUTED).LetterSpacing(0.08f);
-                        t.Span("FINAL CASH CALCULATION").FontFamily(MONO).Bold().FontSize(P(10.5)).FontColor(NAVY).LetterSpacing(0.08f);
-                    });
-                    Step5(body); Step6(body); Step7(body);
-                    body.Item().PaddingTop(P(24)).PaddingBottom(P(24)).ShowEntire().Column(f =>
-                    {
-                        f.Item().PaddingBottom(P(10)).Text(t => Rich(t, "If you still have doubts, reach out to **incentive@squareyards.com**.", 13.5));
-                        f.Item().Text(t => Rich(t, "- **Incentive Team, Square Yards**", 13, INK_SOFT));
-                    });
+                    // The footer travels with the last step so it can never sit alone on a page.
+                    var last = c.Num("dueForRelease") > 0 ? 7 : c.Num("due") > 0 ? 6 : 5;
+                    Step5(body, last == 5 ? Footer : null);
+                    Step6(body, last == 6 ? Footer : null);
+                    Step7(body, last == 7 ? Footer : null);
                 });
             });
         });
@@ -155,7 +152,7 @@ public class Renderer
         {
             case "positive" or "provisional_only":
                 bg = GREEN_SOFT; border = GREEN; big = Fmt.InrNoSym(total);
-                formula = $"{Fmt.Inr(total)} = {Fmt.Inr(due)} (Cash to bank, 80%) + {Fmt.Inr(esop)} (ESOP, 20%)"; break;
+                formula = $"{Fmt.Inr(total)} = {Fmt.Inr(due)} (Cash in bank, 80%) + {Fmt.Inr(esop)} (ESOP, 20%)"; break;
             case "held_no_crm":
                 bg = AMBER_SOFT; border = ORANGE; formula = "₹0 disbursed this Dollar Day. See Step 6 for the held amount."; break;
             case "below_target": formula = "Cumulative revenue is below the eligibility target this cycle."; break;
@@ -237,7 +234,7 @@ public class Renderer
         s.Item().PaddingTop(4).Table(t =>
         {
             t.ColumnsDefinition(cd => { cd.RelativeColumn(2.7f); cd.RelativeColumn(1.6f); cd.RelativeColumn(1.3f); cd.RelativeColumn(1.5f); cd.RelativeColumn(1.4f); cd.RelativeColumn(1.5f); });
-            string[] heads = { "TCF ID", "Deal Revenue", "Deal Month", "Stage", "Type", "Collection %" };
+            string[] heads = { "TCF ID", "Deal Revenue", "Deal Month", "Stage", "Project Type", "Collection %" };
             for (int i = 0; i < heads.Length; i++)
             {
                 var h = heads[i]; var idx = i;
@@ -266,7 +263,7 @@ public class Renderer
     {
         if (deals.Count == 0) return;
         SectionH(s, 3, "Both Incentives - Provisional and Confirmed");
-        Bullets(s, "Two incentives are computed side by side: **Provisional** (Counted / Confirmed / Collected deals) and **Confirmed** (Confirmed and Collected deals).");
+        Bullets(s, "Two incentives are computed side by side: **Provisional** (Counted + Confirmed + Collected deals) and **Confirmed** (Confirmed and Collected deals).");
 
         double target = c.Num("eligibilityTarget"), provBase = c.Num("provBase"), provInc = c.Num("provIncentive"),
             confBase = c.Num("confBase"), confInc = c.Num("confIncentive");
@@ -412,19 +409,19 @@ public class Renderer
                 {
                     "Deal Incentive Share = Provisional Incentive × (Deal Revenue ÷ Total Provisional Incentive Deal Revenue)", "",
                     "[[Then per-deal:]]",
-                    "Focus deal    → Provisional Payable = {{25%}} × Deal Incentive Share",
-                    "Non-Focus deal → Provisional Payable = {{₹0}}",
+                    "For Focus deal     → Provisional Payable = {{25%}} × Deal Incentive Share",
+                    "For Non-Focus deal → Provisional Payable = {{₹0}}",
                 });
             }
             if (confInc > 0)
             {
                 SubHead(s, "Confirmed flow", 20);
-                Flow(s, new[] { ("Confirmed Incentive", Fmt.Inr(confInc)), ("Deal Incentive Share", "Incentive × Rev÷Total"), ("Payable", "max(50%, Collection %)") });
+                Flow(s, new[] { ("Confirmed Incentive", Fmt.Inr(confInc)), ("Deal Incentive Share", "Incentive × Rev÷Total"), ("Payable", "Payout will be based on whichever is higher: 50% or actual collection.") });
                 FormulaCard(s, "CONFIRMED PAYABLE FORMULA", new[]
                 {
                     "Deal Incentive Share = Confirmed Incentive × (Deal Revenue ÷ Total Confirmed Incentive Deal Revenue)", "",
                     "[[Then per-deal:]]",
-                    "Confirmed Payable = {{max(50%, Collection %)}} × Deal Incentive Share",
+                    "Payout will be based on whichever is higher: 50% or actual collection.",
                 });
             }
             SubHead(s, "Per-deal payable table", 22);
@@ -552,7 +549,7 @@ public class Renderer
         s.Item().PaddingTop(P(20)).PaddingBottom(3).EnsureSpace(90).Text(t =>
         {
             t.Span("Cash & ESOP breakup ").Bold().FontSize(P(13.5)).FontColor(INK);
-            t.Span("- 80% cash to bank, 20% ESOP per deal").Medium().FontSize(P(11)).FontColor(INK_SOFT);
+            t.Span("- 80% cash in bank, 20% ESOP per deal").Medium().FontSize(P(11)).FontColor(INK_SOFT);
         });
         s.Item().Table(t =>
         {
@@ -576,33 +573,40 @@ public class Renderer
     }
 
     // ---------- steps 5-7 ----------
-    void Step5(ColumnDescriptor body) => body.Item().Column(s =>
+    void Footer(ColumnDescriptor f)
+    {
+        f.Item().PaddingTop(P(14)).PaddingBottom(P(14)).Column(x =>
+        {
+            x.Item().PaddingBottom(P(6)).Text(t => Rich(t, "If you still have any doubts, please reach out to your T3 or P&L head first. If they remain unresolved, write to **incentive@squareyards.com**.", 13.5));
+            x.Item().Text(t => Rich(t, "- **Incentive Team, Square Yards**", 13, INK_SOFT));
+        });
+    }
+
+    void Step5(ColumnDescriptor body, Action<ColumnDescriptor>? tail = null) => body.Item().ShowEntire().Column(s =>
     {
         double due = c.Num("due"), fy27 = c.Num("fy27Payable"), cash = c.Num("fy27CashPayable"), paid = c.Num("alreadyPaid"), cum = c.Num("cumulativeCash");
         var back = c.GetProperty("backYear").Num("total"); bool hasBack = back > 0;
         string dueTag = due < 0 ? "^^" + Fmt.Inr(due) + "^^" : "**" + Fmt.Inr(due) + "**";
-        SectionH(s, 5, "Due Incentive (cash) after netting Already Paid");
-        Bullets(s, hasBack
-            ? "Only the **cash portion** (80%) of your FY27 payable flows into Due Incentive. Prior Period Payable is already a cash amount. Everything nets against Total Already Paid (also cash)."
-            : "Only the **cash portion** (80%) of your FY27 payable flows into Due Incentive. This nets against Total Already Paid (also cash).");
+        SectionH(s, 5, "Due Incentive (cash in bank) after netting Already Paid");
         var dueColor = due < 0 ? RED_DEEP : due > 0 ? GREEN_DEEP : INK;
-        var lines = new List<string> { $"FY27 Cash Payable (80% of ₹{Fmt.InrNoSym(fy27)}) = **{Fmt.Inr(cash)}**" };
-        if (hasBack) { lines.Add($"Prior Period Payable (cash) = **{Fmt.Inr(back)}**"); lines.Add($"Cumulative Cash Payable = {Fmt.Inr(cash)} + {Fmt.Inr(back)} = **{Fmt.Inr(cum)}**"); }
-        lines.Add($"Total Already Paid (cash) = **{Fmt.Inr(paid)}**");
+        var lines = new List<string> { $"FY27 Monetary Payable (80% of ₹{Fmt.InrNoSym(fy27)}) = **{Fmt.Inr(cash)}**" };
+        if (hasBack) { lines.Add($"Prior Period Payable = **{Fmt.Inr(back)}**"); lines.Add($"Cumulative Monetary Payable = {Fmt.Inr(cash)} + {Fmt.Inr(back)} = **{Fmt.Inr(cum)}**"); }
+        lines.Add($"Total Already Paid = **{Fmt.Inr(paid)}**");
         s.Item().PaddingTop(3).ShowEntire().Background(NAVY_SOFT).BorderLeft(2).BorderColor(NAVY).Padding(P(12)).Column(b =>
         {
             foreach (var l in lines) b.Item().PaddingVertical(1.5f).Text(t => Rich(t, l, 13, INK, true));
             b.Item().PaddingVertical(1.5f).Text(t =>
             {
-                t.Span($"Due Incentive (cash) = {Fmt.Inr(hasBack ? cum : cash)} - {Fmt.Inr(paid)} = ").FontFamily(MONO).Bold().FontSize(P(13)).FontColor(INK);
+                t.Span($"Due Incentive (cash in bank) = {Fmt.Inr(hasBack ? cum : cash)} - {Fmt.Inr(paid)} = ").FontFamily(MONO).Bold().FontSize(P(13)).FontColor(INK);
                 t.Span(Fmt.Inr(due)).FontFamily(MONO).Bold().FontSize(P(13)).FontColor(dueColor);
             });
         });
         if (due < 0)
-            ColorBox(s, RED_SOFT, RED, $"^^No clawback.^^ Even though Due is negative, nothing is recovered. The {Fmt.Inr(paid)} you have been paid stays. Disbursement resumes automatically the next cycle your Cumulative Cash Payable grows past {Fmt.Inr(paid)}.");
+            ColorBox(s, RED_SOFT, RED, $"^^No clawback.^^ Even though Due is negative, nothing is recovered. The {Fmt.Inr(paid)} you have been paid stays. Disbursement resumes automatically the next cycle your Cumulative Monetary Payable grows past {Fmt.Inr(paid)}.");
+        tail?.Invoke(s);
     });
 
-    void Step6(ColumnDescriptor body) => body.Item().ShowEntire().Column(s =>
+    void Step6(ColumnDescriptor body, Action<ColumnDescriptor>? tail = null) => body.Item().ShowEntire().Column(s =>
     {
         if (c.Num("due") <= 0) return;
         SectionH(s, 6, "CRM release check");
@@ -610,23 +614,22 @@ public class Renderer
             ColorBox(s, GREEN_SOFT, GREEN, "**Release ✓.** You have a CRM-approved deal in the current or previous month, so the Due amount disburses this Dollar Day.");
         else
             ColorBox(s, AMBER_SOFT, ORANGE, $"**Held - not lost.** Payout requires a CRM-approved deal in the current or previous month. Your Due Incentive of **{Fmt.Inr(c.Num("due"))}** will release automatically the next qualifying month. Nothing forfeited.");
+        tail?.Invoke(s);
     });
 
-    void Step7(ColumnDescriptor body) => body.Item().ShowEntire().Column(s =>
+    void Step7(ColumnDescriptor body, Action<ColumnDescriptor>? tail = null) => body.Item().ShowEntire().Column(s =>
     {
         double cash = c.Num("dueForRelease");
         if (cash <= 0) return;
-        double esop = cash * 0.25, total = cash + esop;
+        double esop = cash * 0.25;
         SectionH(s, 7, "This Dollar Day disbursement");
-        Bullets(s, "Cash to bank = your **Due Incentive** (already cash-only).",
-            "ESOP = 25% of cash (equivalent to 20% of total incentive) - reverse-calculated since My Incentive numbers are cash-only.");
         s.Item().PaddingTop(10).ShowEntire().Column(b =>
         {
             b.Item().Row(r =>
             {
                 r.RelativeItem().Background(GREEN_SOFT).Border(1).BorderColor(GREEN).Padding(P(16)).Column(k =>
                 {
-                    k.Item().AlignCenter().Text("CASH TO BANK").Bold().FontSize(P(10.5)).FontColor(GREEN_DEEP).LetterSpacing(0.08f);
+                    k.Item().AlignCenter().Text("CASH IN BANK").Bold().FontSize(P(10.5)).FontColor(GREEN_DEEP).LetterSpacing(0.08f);
                     k.Item().PaddingTop(4).AlignCenter().Text(Fmt.Inr(cash)).FontFamily(MONO).Bold().FontSize(P(22)).FontColor(GREEN_DEEP);
                     k.Item().PaddingTop(4).AlignCenter().Text("80% of total incentive").FontSize(P(11)).FontColor(INK_SOFT);
                 });
@@ -638,11 +641,7 @@ public class Renderer
                     k.Item().PaddingTop(4).AlignCenter().Text("20% of total incentive").FontSize(P(11)).FontColor(INK_SOFT);
                 });
             });
-            b.Item().PaddingTop(P(12)).Background(NAVY_SOFT).BorderLeft(2).BorderColor(NAVY).Padding(P(12)).Column(k =>
-            {
-                k.Item().PaddingVertical(1.5f).Text(t => Rich(t, $"**Total incentive this cycle = {Fmt.Inr(total)}**", 12.5, INK, true));
-                k.Item().PaddingVertical(1.5f).Text(t => Rich(t, $"= {Fmt.Inr(cash)} (Cash, 80%) + {Fmt.Inr(esop)} (ESOP, 20%)", 12.5, INK, true));
-            });
         });
+        tail?.Invoke(s);
     });
 }
