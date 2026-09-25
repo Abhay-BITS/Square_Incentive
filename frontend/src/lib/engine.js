@@ -1121,7 +1121,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     ${c.due < 0 ? `
       <div style="margin-top: 10px; padding: 12px 14px; background: ${T.RED_SOFT}; border-left: 3px solid ${T.RED}; border-radius: 3px;">
         <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 0;">
-          <strong style="color: ${T.RED_DEEP};">No clawback.</strong> Even though Due is negative, nothing is recovered. The ${fmtINR(c.alreadyPaid)} you have been paid stays. Disbursement resumes automatically the next cycle your Cumulative Monetary Payable grows past ${fmtINR(c.alreadyPaid)}.
+          <strong style="color: ${T.RED_DEEP};">No clawback:</strong> Nothing is disbursed this cycle, and the amount already paid stays with you. Disbursement will be released whenever the due incentive becomes positive.
         </p>
       </div>
     ` : ''}
@@ -1147,6 +1147,14 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
         </div>
       </td></tr>`;
     }
+  } else {
+    step6Html = sectionH(6, 'CRM release check - not applicable') + `<tr><td style="padding: 4px 0 12px 0;">
+        <div style="padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.MUTED}; border-radius: 3px;">
+          <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 0;">
+            The CRM check only matters when the Due amount is above \u20B90. Your Due amount is not positive this cycle, so nothing is disbursed regardless of CRM approval.
+          </p>
+        </div>
+      </td></tr>`;
   }
 
   // ============ STEP 7: Disbursement + overall incentive summary ============
@@ -1169,6 +1177,25 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
             <div style="font-family: ${T.FONT}; font-size: 10.5px; color: ${T.ORANGE_DEEP}; font-weight: 700; letter-spacing: 0.8px; margin-bottom: 4px;">ESOP</div>
             <div style="font-family: ${T.MONO}; font-size: 22px; font-weight: 700; color: ${T.ORANGE_DEEP};">${fmtINR(esopThisCycle)}</div>
             <div style="font-family: ${T.FONT}; font-size: 11px; color: ${T.INK_SOFT}; margin-top: 4px;">20% of total incentive</div>
+          </td>
+        </tr>
+      </table>
+    </td></tr>`;
+  } else {
+    const zeroNote = (c.due > 0 && !rm.hasCrm) ? 'Held until CRM approval' : 'No disbursement this cycle';
+    step7Html = sectionH(7, 'This Dollar Day disbursement') + `<tr><td style="padding: 4px 0 20px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; margin-top: 10px;">
+        <tr>
+          <td width="49%" style="background: ${T.NAVY_SOFT}; border: 1px solid ${T.BORDER_STRONG}; border-radius: 6px; padding: 16px; text-align: center;">
+            <div style="font-family: ${T.FONT}; font-size: 10.5px; color: ${T.MUTED}; font-weight: 700; letter-spacing: 0.8px; margin-bottom: 4px;">CASH IN BANK</div>
+            <div style="font-family: ${T.MONO}; font-size: 22px; font-weight: 700; color: ${T.MUTED};">\u20B90</div>
+            <div style="font-family: ${T.FONT}; font-size: 11px; color: ${T.INK_SOFT}; margin-top: 4px;">${zeroNote}</div>
+          </td>
+          <td width="2%"></td>
+          <td width="49%" style="background: ${T.NAVY_SOFT}; border: 1px solid ${T.BORDER_STRONG}; border-radius: 6px; padding: 16px; text-align: center;">
+            <div style="font-family: ${T.FONT}; font-size: 10.5px; color: ${T.MUTED}; font-weight: 700; letter-spacing: 0.8px; margin-bottom: 4px;">ESOP</div>
+            <div style="font-family: ${T.MONO}; font-size: 22px; font-weight: 700; color: ${T.MUTED};">\u20B90</div>
+            <div style="font-family: ${T.FONT}; font-size: 11px; color: ${T.INK_SOFT}; margin-top: 4px;">${zeroNote}</div>
           </td>
         </tr>
       </table>
@@ -1227,7 +1254,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
         </td></tr>
 
         <tr><td class="pdf-section-start" style="padding: 24px 28px 24px 28px;">
-          <div style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; line-height: 1.6; margin-bottom: 10px;">If you still have any doubts, please reach out to your T3 or P&amp;L head first. If they remain unresolved, write to <a href="mailto:incentive@squareyards.com" style="color: ${T.NAVY}; font-weight: 700; text-decoration: none;">incentive@squareyards.com</a>.</div>
+          <div style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; line-height: 1.6; margin-bottom: 10px;">If you still have any doubts, please first reach out to your T3 or P&amp;L. If your doubts remain unresolved, write to <a href="mailto:incentive@squareyards.com" style="color: ${T.NAVY}; font-weight: 700; text-decoration: none;">incentive@squareyards.com</a>.</div>
           <div style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK_SOFT};">- <strong style="color: ${T.INK};">Incentive Team, Square Yards</strong></div>
         </td></tr>
 
@@ -1263,7 +1290,7 @@ function generatePlainText(rm) {
   lines.push(`Already Paid = ${fmtINR(c.alreadyPaid)}`);
   lines.push(`Due = ${fmtINR(c.due)}`);
   lines.push('');
-  lines.push('If you still have any doubts, please reach out to your T3 or P&L head first. If they remain unresolved, write to incentive@squareyards.com.');
+  lines.push('If you still have any doubts, please first reach out to your T3 or P&L. If your doubts remain unresolved, write to incentive@squareyards.com.');
   lines.push('');
   lines.push('- Incentive Team, Square Yards');
   return lines.join('\n');

@@ -134,10 +134,9 @@ public class Renderer
                     Fy27Block(body);
                     PriorCard(body);
                     // The footer travels with the last step so it can never sit alone on a page.
-                    var last = c.Num("dueForRelease") > 0 ? 7 : c.Num("due") > 0 ? 6 : 5;
-                    Step5(body, last == 5 ? Footer : null);
-                    Step6(body, last == 6 ? Footer : null);
-                    Step7(body, last == 7 ? Footer : null);
+                    Step5(body);
+                    Step6(body);
+                    Step7(body, Footer);
                 });
             });
         });
@@ -470,7 +469,7 @@ public class Renderer
         double provInc = c.Num("provIncentive"), confInc = c.Num("confIncentive"), provBase = c.Num("provBase"), confBase = c.Num("confBase");
         s.Item().Table(t =>
         {
-            t.ColumnsDefinition(cd => { cd.RelativeColumn(1.9f); cd.RelativeColumn(1.05f); cd.RelativeColumn(1.1f); cd.RelativeColumn(1.45f); cd.RelativeColumn(1.45f); cd.RelativeColumn(1.05f); cd.RelativeColumn(1.65f); });
+            t.ColumnsDefinition(cd => { cd.RelativeColumn(1.8f); cd.RelativeColumn(1.25f); cd.RelativeColumn(1.05f); cd.RelativeColumn(1.4f); cd.RelativeColumn(1.4f); cd.RelativeColumn(1.05f); cd.RelativeColumn(1.6f); });
             void Head(string h, string? sub, bool right, bool center)
             {
                 var cell = t.Cell().Element(HCell);
@@ -577,7 +576,7 @@ public class Renderer
     {
         f.Item().PaddingTop(P(14)).PaddingBottom(P(14)).Column(x =>
         {
-            x.Item().PaddingBottom(P(6)).Text(t => Rich(t, "If you still have any doubts, please reach out to your T3 or P&L head first. If they remain unresolved, write to **incentive@squareyards.com**.", 13.5));
+            x.Item().PaddingBottom(P(6)).Text(t => Rich(t, "If you still have any doubts, please first reach out to your T3 or P&L. If your doubts remain unresolved, write to **incentive@squareyards.com**.", 13.5));
             x.Item().Text(t => Rich(t, "- **Incentive Team, Square Yards**", 13, INK_SOFT));
         });
     }
@@ -602,13 +601,19 @@ public class Renderer
             });
         });
         if (due < 0)
-            ColorBox(s, RED_SOFT, RED, $"^^No clawback.^^ Even though Due is negative, nothing is recovered. The {Fmt.Inr(paid)} you have been paid stays. Disbursement resumes automatically the next cycle your Cumulative Monetary Payable grows past {Fmt.Inr(paid)}.");
+            ColorBox(s, RED_SOFT, RED, "^^No clawback:^^ Nothing is disbursed this cycle, and the amount already paid stays with you. Disbursement will be released whenever the due incentive becomes positive.");
         tail?.Invoke(s);
     });
 
     void Step6(ColumnDescriptor body, Action<ColumnDescriptor>? tail = null) => body.Item().ShowEntire().Column(s =>
     {
-        if (c.Num("due") <= 0) return;
+        if (c.Num("due") <= 0)
+        {
+            SectionH(s, 6, "CRM release check - not applicable");
+            ColorBox(s, NAVY_SOFT, MUTED, "The CRM check only matters when the Due amount is above ₹0. Your Due amount is not positive this cycle, so nothing is disbursed regardless of CRM approval.");
+            tail?.Invoke(s);
+            return;
+        }
         SectionH(s, 6, "CRM release check");
         if (rm.Bool("hasCrm"))
             ColorBox(s, GREEN_SOFT, GREEN, "**Release ✓.** You have a CRM-approved deal in the current or previous month, so the Due amount disburses this Dollar Day.");
@@ -620,25 +625,26 @@ public class Renderer
     void Step7(ColumnDescriptor body, Action<ColumnDescriptor>? tail = null) => body.Item().ShowEntire().Column(s =>
     {
         double cash = c.Num("dueForRelease");
-        if (cash <= 0) return;
+        bool zero = cash <= 0;
+        string note = c.Num("due") > 0 && !rm.Bool("hasCrm") ? "Held until CRM approval" : "No disbursement this cycle";
         double esop = cash * 0.25;
         SectionH(s, 7, "This Dollar Day disbursement");
         s.Item().PaddingTop(10).ShowEntire().Column(b =>
         {
             b.Item().Row(r =>
             {
-                r.RelativeItem().Background(GREEN_SOFT).Border(1).BorderColor(GREEN).Padding(P(16)).Column(k =>
+                r.RelativeItem().Background(zero ? NAVY_SOFT : GREEN_SOFT).Border(1).BorderColor(zero ? BORDER_STRONG : GREEN).Padding(P(16)).Column(k =>
                 {
-                    k.Item().AlignCenter().Text("CASH IN BANK").Bold().FontSize(P(10.5)).FontColor(GREEN_DEEP).LetterSpacing(0.08f);
-                    k.Item().PaddingTop(4).AlignCenter().Text(Fmt.Inr(cash)).FontFamily(MONO).Bold().FontSize(P(22)).FontColor(GREEN_DEEP);
-                    k.Item().PaddingTop(4).AlignCenter().Text("80% of total incentive").FontSize(P(11)).FontColor(INK_SOFT);
+                    k.Item().AlignCenter().Text("CASH IN BANK").Bold().FontSize(P(10.5)).FontColor(zero ? MUTED : GREEN_DEEP).LetterSpacing(0.08f);
+                    k.Item().PaddingTop(4).AlignCenter().Text(Fmt.Inr(cash)).FontFamily(MONO).Bold().FontSize(P(22)).FontColor(zero ? MUTED : GREEN_DEEP);
+                    k.Item().PaddingTop(4).AlignCenter().Text(zero ? note : "80% of total incentive").FontSize(P(11)).FontColor(INK_SOFT);
                 });
                 r.ConstantItem(P(14));
-                r.RelativeItem().Background("#FFFBEB").Border(1).BorderColor(ORANGE).Padding(P(16)).Column(k =>
+                r.RelativeItem().Background(zero ? NAVY_SOFT : "#FFFBEB").Border(1).BorderColor(zero ? BORDER_STRONG : ORANGE).Padding(P(16)).Column(k =>
                 {
-                    k.Item().AlignCenter().Text("ESOP").Bold().FontSize(P(10.5)).FontColor(ORANGE_DEEP).LetterSpacing(0.08f);
-                    k.Item().PaddingTop(4).AlignCenter().Text(Fmt.Inr(esop)).FontFamily(MONO).Bold().FontSize(P(22)).FontColor(ORANGE_DEEP);
-                    k.Item().PaddingTop(4).AlignCenter().Text("20% of total incentive").FontSize(P(11)).FontColor(INK_SOFT);
+                    k.Item().AlignCenter().Text("ESOP").Bold().FontSize(P(10.5)).FontColor(zero ? MUTED : ORANGE_DEEP).LetterSpacing(0.08f);
+                    k.Item().PaddingTop(4).AlignCenter().Text(Fmt.Inr(esop)).FontFamily(MONO).Bold().FontSize(P(22)).FontColor(zero ? MUTED : ORANGE_DEEP);
+                    k.Item().PaddingTop(4).AlignCenter().Text(zero ? note : "20% of total incentive").FontSize(P(11)).FontColor(INK_SOFT);
                 });
             });
         });
