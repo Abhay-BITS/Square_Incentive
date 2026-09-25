@@ -1,6 +1,6 @@
-import { useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
+import { useApp, type LoadStage } from '../context/AppContext';
 import { Layout } from '../components/Layout';
 
 export default function UploadPage() {
@@ -9,8 +9,34 @@ export default function UploadPage() {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [stage, setStage] = useState<LoadStage | null>(null);
+  const [fileName, setFileName] = useState('');
+  const [waited, setWaited] = useState(0);
+  const busy = stage !== null;
+  const processing = stage?.kind === 'processing';
+
+  useEffect(() => {
+    if (!processing) {
+      setWaited(0);
+      return;
+    }
+    const id = setInterval(() => setWaited((w) => w + 1), 1000);
+    return () => clearInterval(id);
+  }, [processing]);
+
   async function handle(file: File) {
-    if (await loadFile(file)) navigate('/validate');
+    if (busy) return;
+    setFileName(file.name);
+    const ok = await loadFile(file, setStage);
+    setStage(null);
+    if (ok) navigate('/validate');
+  }
+
+  function statusLabel(): string {
+    if (!stage) return '';
+    if (stage.kind === 'uploading') return `Uploading ${fileName}… ${stage.percent ?? 0}%`;
+    if (stage.kind === 'processing') return 'Reading the workbook on the server…';
+    return stage.detail ?? 'Calculating…';
   }
 
   function handleFileInput() {
@@ -82,9 +108,22 @@ export default function UploadPage() {
              </div>
              <h2>Upload your workbook</h2>
              <p>Drag and drop the file here, or pick it from your computer.</p>
-             <button className="btn primary upload-btn" onClick={() => fileInputRef.current?.click()}>
+             <button className="btn primary upload-btn" onClick={() => fileInputRef.current?.click()} disabled={busy}>
                Select Excel file
              </button>
+             {stage && (
+               <div className="upload-status" role="status" aria-live="polite">
+                 <div className={'progress' + (stage.percent === undefined ? ' indeterminate' : '')}>
+                   <div className="progress-bar" style={stage.percent === undefined ? undefined : { width: stage.percent + '%' }} />
+                 </div>
+                 <div className="upload-status-text">{statusLabel()}</div>
+                 {processing && waited >= 6 && (
+                   <div className="upload-status-hint">
+                     Still working. The first request after a quiet period can take up to a minute while the server wakes up.
+                   </div>
+                 )}
+               </div>
+             )}
              <div className="upload-meta">
                <span className="chip">.xlsx</span>
                <span className="chip">.xls</span>

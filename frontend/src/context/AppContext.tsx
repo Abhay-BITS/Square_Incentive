@@ -4,6 +4,12 @@ import type { Issue, Rm } from '../lib/engine.js';
 import { uploadWorkbook } from '../lib/api';
 
 type ToastKind = '' | 'success' | 'err';
+
+export interface LoadStage {
+  kind: 'uploading' | 'processing' | 'calculating';
+  percent?: number;
+  detail?: string;
+}
 interface Toast {
   id: number;
   msg: string;
@@ -18,7 +24,7 @@ interface AppState {
   activeRmId: string | null;
   setActiveRmId: (id: string | null) => void;
   toast: (msg: string, kind?: ToastKind) => void;
-  loadFile: (file: File) => Promise<boolean>;
+  loadFile: (file: File, onStage?: (stage: LoadStage) => void) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -47,17 +53,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNavStatus('No file loaded');
   }
 
-  async function loadFile(file: File): Promise<boolean> {
-    setNavStatus('Parsing…');
+  async function loadFile(file: File, onStage?: (stage: LoadStage) => void): Promise<boolean> {
+    const tick = () => new Promise<void>((r) => setTimeout(r, 0));
     try {
-      const res = await uploadWorkbook(file);
+      onStage?.({ kind: 'uploading', percent: 0 });
+      const res = await uploadWorkbook(file, (f) => {
+        onStage?.(f >= 1 ? { kind: 'processing' } : { kind: 'uploading', percent: Math.round(f * 100) });
+      });
       if (!res.success || !res.rmRows || !res.dlRows) {
         throw new Error(res.error || 'Could not parse file.');
       }
+      onStage?.({ kind: 'calculating', percent: 0, detail: 'Validating rows' });
+      await tick();
       const { rms: parsedRms, issues: parsedIssues, joinedCount: jc } = validateAndNormalize(res.rmRows, res.dlRows);
-      parsedRms.forEach((rm) => {
-        rm.calc = calculateIncentive(rm);
-      });
+      for (let i = 0; i < parsedRms.length; i++) {
+        parsedRms[i].calc = calculateIncentive(parsedRms[i]);
+        if (i % 100 === 99 || i === parsedRms.length - 1) {
+          onStage?.({
+            kind: 'calculating',
+            percent: Math.round(((i + 1) / parsedRms.length) * 100),
+            detail: `Calculating incentives for ${i + 1} of ${parsedRms.length} RMs`,
+          });
+          await tick();
+        }
+      }
       setRms(parsedRms);
       setIssues(parsedIssues);
       setJoinedCount(jc);
@@ -66,7 +85,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (e) {
       toast('Could not parse file: ' + (e instanceof Error ? e.message : String(e)), 'err');
-      setNavStatus(rms.length > 0 ? navStatus : 'Parse failed');
       return false;
     }
   }

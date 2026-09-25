@@ -7,13 +7,24 @@ export interface UploadResponse {
   error?: string;
 }
 
-export async function uploadWorkbook(file: File): Promise<UploadResponse> {
-  const form = new FormData();
-  form.append('file', file);
-  const res = await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: form });
-  const data = (await res.json()) as UploadResponse;
-  if (!res.ok && data.success === undefined) {
-    return { success: false, error: `Upload failed (${res.status})` };
-  }
-  return data;
+export function uploadWorkbook(file: File, onUploadProgress?: (fraction: number) => void): Promise<UploadResponse> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE_URL}/api/upload`);
+    xhr.responseType = 'json';
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onUploadProgress?.(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      const data = xhr.response as UploadResponse | null;
+      if (data && typeof data === 'object') resolve(data);
+      else resolve({ success: false, error: `Upload failed (${xhr.status})` });
+    };
+    xhr.onerror = () =>
+      reject(new Error('Could not reach the server. It may be waking up, so please try again in a moment.'));
+    xhr.ontimeout = () => reject(new Error('The server took too long to respond. Please try again.'));
+    const form = new FormData();
+    form.append('file', file);
+    xhr.send(form);
+  });
 }

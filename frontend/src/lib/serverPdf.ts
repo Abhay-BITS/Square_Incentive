@@ -61,11 +61,17 @@ function formatEta(ms: number): string {
   return `about ${Math.floor(min / 60)} h ${min % 60} min left`;
 }
 
-export async function downloadServerPdfZip(rms: Rm[], onProgress?: (message: string) => void): Promise<number> {
+export interface ZipProgress {
+  message: string;
+  percent?: number;
+  detail?: string;
+}
+
+export async function downloadServerPdfZip(rms: Rm[], onProgress?: (progress: ZipProgress) => void): Promise<number> {
   const ts = stamp();
 
   if (rms.length <= BATCH_SIZE) {
-    onProgress?.('Generating…');
+    onProgress?.({ message: 'Generating PDFs…' });
     saveAs(await postWithRetry('/api/pdf/zip', rms), `incentive_pdfs_server_${ts}.zip`);
     return 1;
   }
@@ -88,8 +94,16 @@ export async function downloadServerPdfZip(rms: Rm[], onProgress?: (message: str
     for (let i = 0; i < rms.length; i += BATCH_SIZE) {
       const done = i;
       const elapsed = Date.now() - started;
-      const eta = done > 0 ? ` (${formatEta((elapsed / done) * (rms.length - done))})` : '';
-      onProgress?.(`Generating ${done} of ${rms.length} PDFs${eta}`);
+      onProgress?.({
+        message: `Generating ${done} of ${rms.length} PDFs`,
+        percent: Math.round((done / rms.length) * 100),
+        detail: [
+          savedParts > 0 ? `${savedParts} ZIP file${savedParts > 1 ? 's' : ''} saved` : '',
+          done > 0 ? formatEta((elapsed / done) * (rms.length - done)) : 'estimating time…',
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      });
 
       const batch = await JSZip.loadAsync(await postWithRetry('/api/pdf/zip', rms.slice(i, i + BATCH_SIZE)));
       for (const name of Object.keys(batch.files)) {
@@ -99,7 +113,7 @@ export async function downloadServerPdfZip(rms: Rm[], onProgress?: (message: str
         partBytes += data.length;
       }
     }
-    onProgress?.('Saving…');
+    onProgress?.({ message: 'Saving the last ZIP file…', percent: 100 });
     await flush();
   } catch (e) {
     if (savedParts > 0 || partBytes > 0) {

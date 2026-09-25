@@ -2,14 +2,14 @@ import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { fmtINR } from '../lib/engine.js';
 import { downloadHtmlZip } from '../lib/pdfExport';
-import { downloadServerPdfZip } from '../lib/serverPdf';
+import { downloadServerPdfZip, type ZipProgress } from '../lib/serverPdf';
 import { useApp } from '../context/AppContext';
 import { Layout } from '../components/Layout';
 import { BackLink } from '../components/BackLink';
 
 export default function ExportPage() {
   const { rms, toast } = useApp();
-  const [zipStatus, setZipStatus] = useState<string | null>(null);
+  const [zipProgress, setZipProgress] = useState<ZipProgress | null>(null);
 
   const diag = useMemo(() => {
     const buckets = { positive: 0, zero: 0, held: 0, negative: 0 };
@@ -29,14 +29,14 @@ export default function ExportPage() {
   if (rms.length === 0) return <Navigate to="/" replace />;
 
   async function handleServerZip() {
-    setZipStatus('Generating…');
+    setZipProgress({ message: 'Starting…' });
     try {
-      const parts = await downloadServerPdfZip(rms, setZipStatus);
+      const parts = await downloadServerPdfZip(rms, setZipProgress);
       toast(parts > 1 ? `Generated ${rms.length} PDFs in ${parts} ZIP files` : `Generated ${rms.length} PDFs`, 'success');
     } catch (e) {
       toast('PDF generation failed: ' + (e instanceof Error ? e.message : String(e)), 'err');
     } finally {
-      setZipStatus(null);
+      setZipProgress(null);
     }
   }
 
@@ -64,15 +64,28 @@ export default function ExportPage() {
                One PDF per RM, filename <code>EmployeeCode_MonthDD.pdf</code>. Large exports run in small batches with a progress counter and are split into several ZIP files automatically, so your browser may ask to allow multiple downloads. On a free server this can take a long time for thousands of RMs, so keep the tab open.
              </p>
            </div>
-           <button className="btn primary" onClick={handleServerZip} disabled={zipStatus !== null}>
-             {zipStatus ? (
+           <button className="btn primary" onClick={handleServerZip} disabled={zipProgress !== null}>
+             {zipProgress ? (
                <>
-                 <span className="spinner"></span> {zipStatus}
+                 <span className="spinner"></span> Generating…
                </>
              ) : (
                'Download PDFs (ZIP)'
              )}
            </button>
+           {zipProgress && (
+             <div className="zip-progress" role="status" aria-live="polite">
+               <div className={'progress' + (zipProgress.percent === undefined ? ' indeterminate' : '')}>
+                 <div className="progress-bar" style={zipProgress.percent === undefined ? undefined : { width: zipProgress.percent + '%' }} />
+               </div>
+               <div className="zip-progress-row">
+                 <span className="zip-progress-text">{zipProgress.message}</span>
+                 {zipProgress.percent !== undefined && <span className="zip-progress-percent">{zipProgress.percent}%</span>}
+               </div>
+               {zipProgress.detail && <div className="upload-status-hint zip-progress-detail">{zipProgress.detail}</div>}
+               <div className="upload-status-hint zip-progress-detail">Keep this tab open until it finishes.</div>
+             </div>
+           )}
          </div>
 
          <div className="export-option">
