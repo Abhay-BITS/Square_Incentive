@@ -59,11 +59,10 @@ export default function UploadPage() {
          <div className="hero">
            <div className="hero-copy">
              <span className="eyebrow">Dollar Day incentives</span>
-             <h1>Personal, traceable incentive PDFs for every rep.</h1>
+             <h1>Personal, traceable incentive PDFs for every representative.</h1>
              <p className="lede">
                Upload the Excel of RM data and get a personalized PDF for each rep, showing the incentive amount{' '}
-               <strong>and every calculation step behind it</strong>. Handles 200+ Primary Sales T0/T1 reps in one
-               run.
+               <strong>and every calculation step behind it</strong>.
              </p>
              <ol className="steps">
                <li>
