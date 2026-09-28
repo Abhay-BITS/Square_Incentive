@@ -391,7 +391,7 @@ public class Renderer
                 r.RelativeItem().Background(NAVY_SOFT).Border(1.1f).BorderColor(NAVY).PaddingVertical(P(10)).PaddingHorizontal(4).Column(b =>
                 {
                     b.Item().AlignCenter().Text(st.label).Bold().FontSize(P(11.5)).FontColor(NAVY);
-                    if (st.sub.Contains("<<"))
+                    if (st.sub.Contains("{{"))
                         b.Item().PaddingTop(2).AlignCenter().Text(t => { t.AlignCenter(); Rich(t, st.sub, 10, INK_SOFT, true); });
                     else
                         b.Item().PaddingTop(2).AlignCenter().Text(st.sub).FontFamily(MONO).FontSize(P(10)).FontColor(INK_SOFT);
@@ -429,12 +429,12 @@ public class Renderer
             if (confInc > 0)
             {
                 SubHead(s, "Confirmed flow", 20);
-                Flow(s, new[] { ("Confirmed Incentive", Fmt.Inr(confInc)), ("Deal Incentive Share", "Incentive × Rev÷Total"), ("Payable", "<<Payout will be based on whichever is higher: 50% or actual collection.>>") });
+                Flow(s, new[] { ("Confirmed Incentive", Fmt.Inr(confInc)), ("Deal Incentive Share", "Incentive × Rev÷Total"), ("Payable", "Payout will be based on whichever is higher: 50% or actual collection.") });
                 FormulaCard(s, "CONFIRMED PAYABLE FORMULA", new[]
                 {
                     "Deal Incentive Share = Confirmed Incentive × (Deal Revenue ÷ Total Confirmed Incentive Deal Revenue)", "",
                     "[[Then per-deal:]]",
-                    "<<Payout will be based on whichever is higher: 50% or actual collection.>>",
+                    "{{Payout will be based on whichever is higher: 50% or actual collection.}}",
                 });
             }
             SubHead(s, "Per-deal payable table", 22);

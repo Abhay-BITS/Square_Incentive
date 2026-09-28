@@ -294,6 +294,9 @@ function validateAndNormalize(rmRows, dlRows) {
       if (collectionRaw !== null && collectionRaw !== '' && (isNaN(c) || c !== 100)) {
         issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal must have Collection 100% (got "'+collectionRaw+'").'}); return;
       }
+      if (collectionRaw === null || collectionRaw === '') {
+        issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has no Collection %; treated as 100%.'});
+      }
       collection = 100;
     } else if (stage === 'Counted') {
       // Counted: 0% (or missing) is OK. Any positive value is an error.
@@ -965,11 +968,11 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       { label: 'Deal Incentive Share', sub: 'Incentive \u00D7 Rev\u00F7Total' },
       { label: 'Payable', sub: '25% (Focus) or \u20B90' }
     ]);
-    const HL = (t) => `<span style="background: #FDE047; color: #1F2A44; font-weight: 700; padding: 1px 5px; border-radius: 3px;">${t}</span>`;
+    const HL = (t) => `<span style="color: ${T.GOLD};">${t}</span>`;
     const confFlow = flowChart([
       { label: 'Confirmed Incentive', sub: fmtINR(c.confIncentive) },
       { label: 'Deal Incentive Share', sub: 'Incentive \u00D7 Rev\u00F7Total' },
-      { label: 'Payable', sub: HL('Payout will be based on whichever is higher: 50% or actual collection.') }
+      { label: 'Payable', sub: 'Payout will be based on whichever is higher: 50% or actual collection.' }
     ]);
 
     // Provisional block: flow + formula + explanation
@@ -982,8 +985,8 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           'Deal Incentive Share = Provisional Incentive \u00D7 (Deal Revenue \u00F7 Total Provisional Incentive Deal Revenue)',
           '',
           '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
-          'For Focus deal &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\u2192 Provisional Payable = <span style="color: ' + T.GOLD + ';">25%</span> \u00D7 Deal Incentive Share',
-          'For Non-Focus deal \u2192 Provisional Payable = <span style="color: ' + T.GOLD + ';">\u20B90</span>'
+          '<span style="display: inline-block; width: 19ch;">For Focus deal</span>\u2192 Provisional Payable = <span style="color: ' + T.GOLD + ';">25%</span> \u00D7 Deal Incentive Share',
+          '<span style="display: inline-block; width: 19ch;">For Non-Focus deal</span>\u2192 Provisional Payable = <span style="color: ' + T.GOLD + ';">\u20B90</span>'
         ])}
       `;
     }
