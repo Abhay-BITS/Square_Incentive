@@ -1195,7 +1195,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       step6Html = sectionH(nextNo(), 'CRM release check') + `<tr><td style="padding: 4px 0 12px 0;">
         <div style="padding: 12px 14px; background: ${T.AMBER_SOFT}; border-left: 3px solid ${T.ORANGE}; border-radius: 3px;">
           <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 0;">
-            <strong style="background: #FDE047; color: ${T.INK}; padding: 1px 5px; border-radius: 3px;">Incentive Held</strong> as you don't have a CRM-approved deal in the T-1 or T month (T = Dollar Day month).<br>Your Due Incentive of <strong>${fmtINR(c.due)}</strong> will release automatically the next qualifying month.
+            <strong style="color: #A16207;">Incentive Held</strong> as you don't have a CRM-approved deal in the T-1 or T month (T = Dollar Day month).<br>Your Due Incentive of <strong>${fmtINR(c.due)}</strong> will release automatically the next qualifying month.
           </p>
         </div>
       </td></tr>`;

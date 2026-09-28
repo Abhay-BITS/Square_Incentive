@@ -42,7 +42,7 @@ public class Renderer
         scenario = c.Str("overallScenario");
     }
 
-    // ---------- rich text: **bold**  ^^red bold^^  {{gold}}  [[muted]]  <<yellow highlight>> ----------
+    // ---------- rich text: **bold**  ^^red bold^^  {{gold}}  [[muted]]  <<dark yellow bold>> ----------
     static void Rich(TextDescriptor t, string s, double px, string color = INK, bool mono = false)
     {
         bool bold = false, red = false, gold = false, dim = false, hl = false; var buf = "";
@@ -50,8 +50,7 @@ public class Renderer
         {
             if (buf == "") return;
             var sp = t.Span(buf).FontSize(P(px)).FontFamily(mono ? MONO : SANS)
-                .FontColor(hl ? INK : red ? RED_DEEP : gold ? GOLD : dim ? "#A5A9BB" : color);
-            if (hl) sp.BackgroundColor("#FDE047");
+                .FontColor(hl ? "#A16207" : red ? RED_DEEP : gold ? GOLD : dim ? "#A5A9BB" : color);
             if (bold || red || hl) sp.Bold(); else if (mono) sp.Medium();
             buf = "";
         }
