@@ -606,7 +606,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   // Block A (gold) - Prior Periods with final payables (only if any exist)
   // Block B (navy) - April 2026 Onwards intro that leads into Steps 1-7
   const buildPriorPeriodsCard = (c, T) => {
-    if (!c.backYear || c.backYear.total <= 0) return '';
+    const priorTotal = c.backYear ? c.backYear.total : 0;   // always shown, even when it is 0
     // Single number only - no year-by-year breakdown
     return `
       <tr><td style="padding: 18px 28px 0 28px;">
@@ -622,7 +622,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
                 <tr>
                   <td style="font-family: ${T.FONT}; font-size: 13.5px; font-weight: 700; color: ${T.INK}; line-height: 1.55;">Final Incentive Payable</td>
-                  <td style="font-family: ${T.MONO}; font-size: 18px; font-weight: 700; color: ${T.NAVY}; text-align: right; line-height: 1.2;">${fmtINR(c.backYear.total)}</td>
+                  <td style="font-family: ${T.MONO}; font-size: 18px; font-weight: 700; color: ${T.NAVY}; text-align: right; line-height: 1.2;">${fmtINR(priorTotal)}</td>
                 </tr>
               </table>
             </td>
@@ -1277,7 +1277,6 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
               <td>
                 <img src="${LOGO_WHITE}" alt="Square Yards" height="34" style="display: block; height: 34px; width: auto;">
               </td>
-              <td style="text-align: right; font-family: ${T.FONT}; font-size: 11px; color: rgba(255,255,255,0.7); font-weight: 500; white-space: nowrap;">Incentive Team \u00B7 Dollar Day ${escapeHtml(rm.ddDate)}</td>
             </tr>
           </table>
         </td></tr>
@@ -1308,7 +1307,8 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
 
         <tr><td class="pdf-section-start" style="padding: 24px 28px 24px 28px;">
           <div style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; line-height: 1.6; margin-bottom: 10px;">If you still have any doubts, please first reach out to your T3 or P&amp;L. If your doubts remain unresolved, write to <a href="mailto:incentive@squareyards.com" style="color: ${T.NAVY}; font-weight: 700; text-decoration: none;">incentive@squareyards.com</a>.</div>
-          <div style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK_SOFT};">- <strong style="color: ${T.INK};">Incentive Team, Square Yards</strong></div>
+          <div style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK_SOFT}; margin-top: 16px; line-height: 1.5;">Regards,<br><strong style="font-size: 14px; color: ${T.NAVY};">Incentive Team</strong><br><span style="color: ${T.MUTED};">Square Yards</span></div>
+          <div style="font-family: ${T.FONT}; font-size: 11px; color: ${T.MUTED}; line-height: 1.55; margin-top: 18px; padding-top: 12px; border-top: 1px solid ${T.BORDER};">This document is confidential and intended solely for the named recipient. Please do not forward or share it with anyone else.</div>
         </td></tr>
 
       </table>
@@ -1345,7 +1345,11 @@ function generatePlainText(rm) {
   lines.push('');
   lines.push('If you still have any doubts, please first reach out to your T3 or P&L. If your doubts remain unresolved, write to incentive@squareyards.com.');
   lines.push('');
-  lines.push('- Incentive Team, Square Yards');
+  lines.push('Regards,');
+  lines.push('Incentive Team');
+  lines.push('Square Yards');
+  lines.push('');
+  lines.push('This document is confidential and intended solely for the named recipient. Please do not forward or share it with anyone else.');
   return lines.join('\n');
 }
 

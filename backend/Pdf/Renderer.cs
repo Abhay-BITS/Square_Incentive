@@ -128,7 +128,6 @@ public class Renderer
                 {
                     r.ConstantItem(P(85)).Height(P(34)).Image(LogoWhite).FitArea();
                     r.RelativeItem();
-                    r.AutoItem().AlignMiddle().Text($"Incentive Team · Dollar Day {rm.Str("ddDate")}").Medium().FontSize(P(11)).FontColor("#B3B7C7");
                 });
                 card.Item().PaddingHorizontal(P(28)).Column(body =>
                 {
@@ -196,8 +195,7 @@ public class Renderer
 
     void PriorCard(ColumnDescriptor body)
     {
-        var total = c.GetProperty("backYear").Num("total");
-        if (total <= 0) return;
+        var total = c.GetProperty("backYear").Num("total");   // always shown, even when it is 0
         body.Item().PaddingTop(P(18)).ShowEntire().Border(1.4f).BorderColor(ORANGE_DEEP).Column(p =>
         {
             p.Item().Background("#FFFBEB").BorderBottom(1.4f).BorderColor(ORANGE_DEEP).Padding(P(18)).Column(h =>
@@ -590,7 +588,14 @@ public class Renderer
         f.Item().PaddingTop(P(14)).PaddingBottom(P(14)).Column(x =>
         {
             x.Item().PaddingBottom(P(6)).Text(t => Rich(t, "If you still have any doubts, please first reach out to your T3 or P&L. If your doubts remain unresolved, write to **incentive@squareyards.com**.", 13.5));
-            x.Item().Text(t => Rich(t, "- **Incentive Team, Square Yards**", 13, INK_SOFT));
+            x.Item().PaddingTop(P(16)).Column(sig =>
+            {
+                sig.Item().Text("Regards,").FontSize(P(13)).FontColor(INK_SOFT);
+                sig.Item().Text("Incentive Team").Bold().FontSize(P(14)).FontColor(NAVY);
+                sig.Item().Text("Square Yards").FontSize(P(13)).FontColor(MUTED);
+            });
+            x.Item().PaddingTop(P(18)).BorderTop(0.5f).BorderColor(BORDER).PaddingTop(P(12))
+                .Text("This document is confidential and intended solely for the named recipient. Please do not forward or share it with anyone else.").FontSize(P(11)).FontColor(MUTED);
         });
     }
 
