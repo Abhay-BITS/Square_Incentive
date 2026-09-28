@@ -26,6 +26,10 @@ static class Fmt
 
     public static string InrNoSym(double n) => Inr(n).Replace("₹", "");
 
+    // Collection % for display: up to 2 decimals, no trailing zeros (82.4223242 -> 82.42, 80 -> 80).
+    public static string Pct(double n) =>
+        (Math.Floor(n * 100 + 0.5) / 100).ToString("0.##", CultureInfo.InvariantCulture) + "%";
+
     static string Trim(double v)
     {
         var s = v.ToString("F2", CultureInfo.InvariantCulture);

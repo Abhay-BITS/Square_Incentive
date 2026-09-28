@@ -22,6 +22,10 @@ function fmtINR(n) {
   } else out = s;
   return (neg ? '-₹' : '₹') + out;
 }
+// Collection % for display: up to 2 decimals, no trailing zeros (82.4223242 -> 82.42, 80 -> 80).
+function fmtPct(n) {
+  return String(Math.round(Number(n) * 100) / 100) + '%';
+}
 function fmtINRnoSym(n) { return fmtINR(n).replace('₹',''); }
 function fmtL(n) {
   const inLakh = n / 100000;
@@ -70,32 +74,57 @@ function fmtDate(v) {
   else if (typeof v === 'number') {
     const excelEpoch = new Date(Date.UTC(1899, 11, 30));
     d = new Date(excelEpoch.getTime() + v * 86400000);
-  } else d = new Date(v);
+  } else d = toLocalDate(v);
   if (isNaN(d.getTime())) return String(v);
-  return d.toISOString().slice(0, 10);
+  const utc = typeof v === 'number';   // Excel serials are built in UTC, everything else is local midnight
+  const y = utc ? d.getUTCFullYear() : d.getFullYear();
+  const mo = (utc ? d.getUTCMonth() : d.getMonth()) + 1;
+  const da = utc ? d.getUTCDate() : d.getDate();
+  return y + '-' + String(mo).padStart(2, '0') + '-' + String(da).padStart(2, '0');
+}
+// 'YYYY-MM-DD...' strings are read as that calendar date in local time, so the day never shifts with the timezone.
+function toLocalDate(v) {
+  const m = typeof v === 'string' ? v.match(/^(\d{4})-(\d{2})-(\d{2})/) : null;
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v);
+}
+function isReadableDate(v) {
+  if (v instanceof Date) return !isNaN(v.getTime());
+  if (typeof v === 'number') return isFinite(v);
+  return !isNaN(new Date(v).getTime());
 }
 function ddMonthLabel(dateStr) {
-  const d = new Date(dateStr);
+  const d = toLocalDate(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 }
 function ddMonthShort(dateStr) {
-  const d = new Date(dateStr);
+  const d = toLocalDate(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleString('en-US', { month: 'long' }) + d.getFullYear();
 }
-function computeCoveredRange(ddDateStr, monthsElapsed) {
-  const d = new Date(ddDateStr);
+// Months in the period: April of the financial year up to the month before the Dollar Day.
+function monthsFromDollarDay(ddDateStr) {
+  const d = toLocalDate(ddDateStr);
+  if (isNaN(d.getTime())) return null;
+  const endM = (d.getMonth() + 11) % 12;
+  return endM >= 3 ? endM - 2 : endM + 10;
+}
+function computeCoveredRange(ddDateStr) {
+  const d = toLocalDate(ddDateStr);
   if (isNaN(d.getTime())) return null;
   let endM = d.getMonth() - 1; let endY = d.getFullYear();
   if (endM < 0) { endM = 11; endY--; }
-  let startM = endM - (monthsElapsed - 1); let startY = endY;
-  while (startM < 0) { startM += 12; startY--; }
+  // The period always starts in April of the financial year the end month falls in.
+  const startM = 3; const startY = endM >= 3 ? endY : endY - 1;
   const NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   return {
     startLabel: NAMES[startM] + ' ' + startY,
     endLabel: NAMES[endM] + ' ' + endY,
-    rangeLabel: NAMES[startM] + ' to ' + NAMES[endM] + ' ' + endY + (startY !== endY ? ' (across ' + startY + '-' + endY + ')' : ''),
+    rangeLabel: (startY === endY && startM === endM)
+      ? NAMES[endM] + ' ' + endY
+      : startY === endY
+        ? NAMES[startM] + ' to ' + NAMES[endM] + ' ' + endY
+        : NAMES[startM] + ' ' + startY + ' to ' + NAMES[endM] + ' ' + endY,
     startM, startY, endM, endY,
   };
 }
@@ -150,7 +179,6 @@ function validateAndNormalize(rmRows, dlRows) {
     const name = pick(r, 'Full Name','Name');
     const tier = pick(r, 'Tier');
     const vertical = pick(r, 'Vertical') || 'Primary Sales';
-    const months = pick(r, 'Months Elapsed','Months');
     const alreadyPaid = pick(r, 'Total Already Paid','Already Paid YTD','Already Paid');
     const hasCrmRaw = pick(r, 'Has CRM Approved Deal','CRM Deal','CRM');
     const ddDate = pick(r, 'Dollar Day Date','DD Date','Dollar Day');
@@ -167,21 +195,26 @@ function validateAndNormalize(rmRows, dlRows) {
     if (!name) issues.push({level:'err',loc:empCode,msg:'Missing Full Name.'});
     if (!tier || !['T0','T1'].includes(String(tier).trim().toUpperCase())) issues.push({level:'err',loc:empCode,msg:'Tier must be T0 or T1 (got "'+tier+'").'});
 
-    const mN = Number(months);
-    if (isNaN(mN) || mN < 1 || mN > 12) issues.push({level:'err',loc:empCode,msg:'Months Elapsed must be 1-12 (got "'+months+'").'});
-    const validMonths = Math.max(1, Math.min(12, mN || 1));
+    // Months in the period come from the Dollar Day (April to the month before it); the Months Elapsed column is ignored.
+    const validMonths = monthsFromDollarDay(fmtDate(ddDate)) || 1;
     for (let i = 0; i < validMonths; i++) {
       const s = salaries[i];
-      if (s === null || isNaN(s) || s <= 0) issues.push({level:'err',loc:empCode,msg:'Salary '+SALARY_MONTHS[i]+' missing or invalid - must be filled for elapsed months.'});
+      if (s === null || isNaN(s) || s <= 0) issues.push({level:'err',loc:empCode,msg:'Salary '+SALARY_MONTHS[i]+' missing or invalid - must be filled for every month in the period.'});
     }
     for (let i = validMonths; i < 12; i++) {
-      if (salaries[i] !== null && !isNaN(salaries[i])) issues.push({level:'warn',loc:empCode,msg:'Salary '+SALARY_MONTHS[i]+' provided but only '+validMonths+' months elapsed - will be ignored.'});
+      if (salaries[i] !== null && !isNaN(salaries[i])) issues.push({level:'warn',loc:empCode,msg:'Salary '+SALARY_MONTHS[i]+' provided but only '+validMonths+' months in the period - will be ignored.'});
     }
 
     const apN = Number(alreadyPaid);
     if (alreadyPaid !== null && (isNaN(apN) || apN < 0)) issues.push({level:'warn',loc:empCode,msg:'Total Already Paid treated as 0.'});
-    if (hasCrmRaw === null) issues.push({level:'warn',loc:empCode,msg:'CRM field missing, defaulting to No.'});
+    if (hasCrmRaw === null) issues.push({level:'err',loc:empCode,msg:'CRM field missing, defaulting to No.'});
+    else if (!['yes','y','true','1','no','n','false','0'].includes(String(hasCrmRaw).trim().toLowerCase())) issues.push({level:'err',loc:empCode,msg:'CRM must be Yes or No (got "'+hasCrmRaw+'").'});
     if (!ddDate) issues.push({level:'err',loc:empCode,msg:'Dollar Day Date missing.'});
+    else if (!isReadableDate(ddDate)) issues.push({level:'err',loc:empCode,msg:'Dollar Day Date is not a readable date (got "'+ddDate+'").'});
+    if (priorPayable !== null) {
+      const ppN = Number(priorPayable);
+      if (isNaN(ppN) || ppN < 0) issues.push({level:'err',loc:empCode,msg:'Prior Period Final Payable must be a number, 0 or more (got "'+priorPayable+'").'});
+    }
 
     // Parse back-year payables (default 0 if missing)
     const parseBack = (v) => {
@@ -210,6 +243,7 @@ function validateAndNormalize(rmRows, dlRows) {
   });
 
   let joinedCount = 0;
+  const seenTcf = {};
   dlRows.forEach((r, idx) => {
     const rowNum = idx + 2;
     const rmId = pick(r, 'Employee Code','Emp Code','RM ID','RMID');
@@ -233,6 +267,12 @@ function validateAndNormalize(rmRows, dlRows) {
     if (!stage) { issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Stage must be Counted/Logged In, Confirmed, or Collected (with or without "(Count)" suffix).'}); return; }
     if (!type) { issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Type must be Focus or Non-Focus.'}); return; }
     if (!month) issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Deal Month missing or invalid - will show as "-" in the PDF.'});
+    else if (SALARY_MONTHS.indexOf(month) >= rmMap[rmId].months) { issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Deal Month "'+month+'" is outside the '+rmMap[rmId].months+' month(s) in this RM\'s period.'}); return; }
+
+    if (tcfId !== null) {
+      if (seenTcf[String(tcfId).trim()] !== undefined) issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Duplicate TCF ID "'+tcfId+'" (first seen on Deals row '+seenTcf[String(tcfId).trim()]+').'});
+      else seenTcf[String(tcfId).trim()] = rowNum;
+    }
 
     let collection = null;
     if (stage === 'Confirmed') {
@@ -249,13 +289,17 @@ function validateAndNormalize(rmRows, dlRows) {
         collection = c;
       }
     } else if (stage === 'Collected') {
-      // Collected is always 100%. Any other input silently forced to 100 (no warning - it's expected).
+      // Collected is always 100%. A different value is an error.
+      const c = Number(collectionRaw);
+      if (collectionRaw !== null && collectionRaw !== '' && (isNaN(c) || c !== 100)) {
+        issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal must have Collection 100% (got "'+collectionRaw+'").'}); return;
+      }
       collection = 100;
     } else if (stage === 'Counted') {
-      // Counted: 0% (or missing) is OK. Any positive value → warning (stage should probably be Confirmed).
+      // Counted: 0% (or missing) is OK. Any positive value is an error.
       const c = Number(collectionRaw);
       if (collectionRaw !== null && collectionRaw !== '' && !isNaN(c) && c > 0) {
-        issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Counted deal has Collection ' + c + '% - should this be Confirmed instead?'});
+        issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Counted can not have collection %'}); return;
       }
       collection = 0;
     }
@@ -347,7 +391,7 @@ function calculateIncentive(rm) {
         const rawPct = d.collection / 100;
         const pct = Math.max(0.5, rawPct);
         payable = pct * confShare;
-        calcNote = (pct * 100).toFixed(0) + '%' + (rawPct < 0.5 ? ' (floor)' : '') + ' × ' + fmtINR(confShare);
+        calcNote = fmtPct(pct * 100) + (rawPct < 0.5 ? ' (floor)' : '') + ' × ' + fmtINR(confShare);
       } else if (d.type === 'Focus' && provIncentive > 0) {
         // Fallback: Focus Confirmed/Collected → Provisional 25% path
         whichApplies = 'provisional';
@@ -418,7 +462,7 @@ function calculateIncentive(rm) {
   else if (provIncentive > 0 && confIncentive === 0) overallScenario = 'provisional_only';
   else overallScenario = 'positive';
 
-  const coverage = computeCoveredRange(rm.ddDate, rm.months);
+  const coverage = computeCoveredRange(rm.ddDate);
   const uniqueSalaries = new Set(rm.salaries.slice(0, rm.months));
   const salaryConstant = uniqueSalaries.size === 1;
 
@@ -508,7 +552,7 @@ function getHeroConf(rm, c, T, month) {
       bg: T.AMBER_SOFT, border: T.ORANGE,
       label: 'YOUR ' + monthUp + ' DOLLAR DAY INCENTIVE',
       big: '0',
-      formula: '₹0 disbursed this Dollar Day. See Step 6 for the held amount.',
+      formula: '₹0 disbursed this Dollar Day. See Step ' + (rm.deals.length > 0 ? 6 : 4) + ' for the held amount.',
     };
   }
   if (c.overallScenario === 'below_target') {
@@ -531,6 +575,9 @@ function getHeroConf(rm, c, T, month) {
 function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
 
   // ============ Helpers ============
+  // Steps are numbered in the order they are built, so a skipped step never leaves a gap.
+  let stepNo = 0;
+  const nextNo = () => ++stepNo;
   const sectionH = (num, title) => `
     <tr><td class="pdf-section-start" style="padding: 24px 0 8px 0;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
@@ -732,7 +779,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           </td>
         </tr>
         <tr>
-          <td width="${targetWidth}%" style="padding: 6px 6px 0 6px; font-family: ${T.MONO}; font-size: 11.5px; color: ${leftTextColor}; text-align: center;">5% \u00D7 ${fmtL(targetAmt)} = <strong>${fmtINR(fivePct)}</strong></td>
+          <td width="${targetWidth}%" style="padding: 6px 6px 0 6px; font-family: ${T.MONO}; font-size: 11.5px; color: ${leftTextColor}; text-align: center;">${state === 'below_target' ? '<strong>\u20B90</strong>' : '5% \u00D7 ' + fmtL(targetAmt) + ' = <strong>' + fmtINR(fivePct) + '</strong>'}</td>
           <td width="${excessWidth}%" style="padding: 6px 6px 0 6px; font-family: ${T.MONO}; font-size: 11.5px; color: ${rightTextColor}; text-align: center;">40% \u00D7 ${excess > 0 ? fmtL(excess) : '\u20B90'} = <strong>${fmtINR(fortyPct)}</strong></td>
         </tr>
         <tr>
@@ -766,7 +813,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   };
 
   // ============ STEP 1 ============
-  const step1Html = sectionH(1, 'YTD Salary Cost and Eligibility Target') + `<tr><td style="padding: 4px 0 12px 0;">
+  const step1Html = sectionH(nextNo(), 'YTD Salary Cost and Eligibility Target') + `<tr><td style="padding: 4px 0 12px 0;">
     ${bulletList([
       `<strong>YTD Salary Cost</strong> = sum of your salaries in the elapsed months (${rm.months} months this cycle).`,
       `<strong>Eligibility Target</strong> = 5 \u00D7 YTD Salary Cost. Your revenue must cross this to earn any incentive.`
@@ -780,7 +827,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   // ============ STEP 2 ============
   let step2Html;
   if (rm.deals.length === 0) {
-    step2Html = sectionH(2, 'Deals in this cycle') + `<tr><td style="padding: 4px 0 12px 0;">
+    step2Html = sectionH(nextNo(), 'Deals in this cycle') + `<tr><td style="padding: 4px 0 12px 0;">
       ${bulletList([`You had <strong>no deals</strong> in ${rangeLabel}. Nothing to compute this cycle.`])}
     </td></tr>`;
   } else {
@@ -796,10 +843,10 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.FONT}; font-size: 12px; text-align: center; color: ${T.INK_SOFT};">${d.month || '-'}</td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; text-align: center;"><span style="background: ${stgBg}; color: ${stgFg}; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">${d.stage}</span></td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; text-align: center;"><span style="background: ${typBg}; color: ${typFg}; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">${d.type}</span></td>
-        <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.MONO}; font-size: 12px; text-align: right; color: ${T.INK};">${d.collection !== null ? d.collection + '%' : '-'}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.MONO}; font-size: 12px; text-align: right; color: ${T.INK};">${d.collection !== null ? fmtPct(d.collection) : '-'}</td>
       </tr>`;
     });
-    step2Html = sectionH(2, 'Deals in this cycle') + `<tr><td style="padding: 4px 0 12px 0;">
+    step2Html = sectionH(nextNo(), 'Deals in this cycle') + `<tr><td style="padding: 4px 0 12px 0;">
       ${bulletList([`These are your ${rm.deals.length} deal(s) booked in <strong>${rangeLabel}</strong>.`])}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; border: 1px solid ${T.BORDER}; border-radius: 6px; overflow: hidden; margin-top: 8px;">
         <thead><tr style="background: ${T.NAVY};">
@@ -857,7 +904,9 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
         `<strong>Deals used:</strong> ${tcfListWithStage(provDeals)} (${provDealCount} deals - all Counted, Confirmed and Collected stages)`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
         `<strong>Total Provisional Incentive Deal Revenue:</strong> ${sumFormula(provDeals)} = ${fmtINR(c.provBase)}`,
-        `<strong>Crosses target</strong> by ${fmtINR(c.provBase - c.eligibilityTarget)}`
+        c.provBase > c.eligibilityTarget
+          ? `<strong>Crosses target</strong> by ${fmtINR(c.provBase - c.eligibilityTarget)}`
+          : `<strong>Exactly at target</strong> - 5% of target applies.`
       ])}
       ${slabVisual(c.eligibilityTarget, c.provBase, c.provIncentive, 'Provisional Incentive')}`;
   }
@@ -886,7 +935,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   } else {
     const crossStatus = c.confBase > c.eligibilityTarget
       ? `<strong>Crosses target</strong> by ${fmtINR(c.confBase - c.eligibilityTarget)}`
-      : `<strong>Exactly at target</strong> - 5% of target applies, no excess`;
+      : `<strong>Exactly at target</strong> - 5% of target applies.`;
     confBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 22px 0 6px 0; font-weight: 700;">Confirmed Incentive</p>
       ${bulletList([
@@ -899,7 +948,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   }
 
   const step3Html = rm.deals.length === 0 ? '' :
-    sectionH(3, 'Both Incentives - Provisional and Confirmed') + `<tr><td style="padding: 4px 0 12px 0;">
+    sectionH(nextNo(), 'Both Incentives - Provisional and Confirmed') + `<tr><td style="padding: 4px 0 12px 0;">
       ${bulletList([
         `Two incentives are computed side by side: <strong>Provisional</strong> (Counted + Confirmed + Collected deals) and <strong>Confirmed</strong> (Confirmed and Collected deals).`
       ])}
@@ -916,10 +965,11 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       { label: 'Deal Incentive Share', sub: 'Incentive \u00D7 Rev\u00F7Total' },
       { label: 'Payable', sub: '25% (Focus) or \u20B90' }
     ]);
+    const HL = (t) => `<span style="background: #FDE047; color: #1F2A44; font-weight: 700; padding: 1px 5px; border-radius: 3px;">${t}</span>`;
     const confFlow = flowChart([
       { label: 'Confirmed Incentive', sub: fmtINR(c.confIncentive) },
       { label: 'Deal Incentive Share', sub: 'Incentive \u00D7 Rev\u00F7Total' },
-      { label: 'Payable', sub: 'Payout will be based on whichever is higher: 50% or actual collection.' }
+      { label: 'Payable', sub: HL('Payout will be based on whichever is higher: 50% or actual collection.') }
     ]);
 
     // Provisional block: flow + formula + explanation
@@ -947,7 +997,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           'Deal Incentive Share = Confirmed Incentive \u00D7 (Deal Revenue \u00F7 Total Confirmed Incentive Deal Revenue)',
           '',
           '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
-          'Payout will be based on whichever is higher: 50% or actual collection.'
+          HL('Payout will be based on whichever is higher: 50% or actual collection.')
         ])}
       `;
     }
@@ -1011,7 +1061,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       if (dr.whichApplies === 'provisional') {
         whichCell = '<strong style="color: ' + T.GREEN_DEEP + ';">Provisional</strong><br><span style="color: ' + T.INK_SOFT + '; font-size: 10.5px;">25% focus advance</span>';
       } else if (dr.whichApplies === 'confirmed') {
-        whichCell = '<strong style="color: ' + T.ORANGE_DEEP + ';">Confirmed</strong><br><span style="color: ' + T.INK_SOFT + '; font-size: 10.5px;">Collection ' + d.collection + '%</span>';
+        whichCell = '<strong style="color: ' + T.ORANGE_DEEP + ';">Confirmed</strong><br><span style="color: ' + T.INK_SOFT + '; font-size: 10.5px;">Collection ' + fmtPct(d.collection) + '</span>';
       } else {
         whichCell = '<strong style="color: ' + T.MUTED + ';">No incentive</strong>' +
                     (dr.noReason ? '<br><span style="color: ' + T.MUTED + '; font-size: 10.5px; font-style: italic;">' + escapeHtml(dr.noReason) + '</span>' : '');
@@ -1055,7 +1105,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       <td style="padding: 10px; font-family: ${T.MONO}; font-size: 13px; font-weight: 700; color: ${T.ORANGE_DEEP}; text-align: right;">${fmtINR(c.fy27EsopPayable)}</td>
     </tr>`;
     const breakupTable = c.fy27Payable > 0 ? `
-      <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 20px 0 6px 0; font-weight: 700;">Cash &amp; ESOP breakup <span style="font-size: 11px; color: ${T.INK_SOFT}; font-weight: 500;">- 80% cash in bank, 20% ESOP per deal</span></p>
+      <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 20px 0 6px 0; font-weight: 700;">Monetary &amp; ESOP breakup <span style="font-size: 11px; color: ${T.INK_SOFT}; font-weight: 500;">- 80% cash in bank, 20% ESOP per deal</span></p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; border: 1px solid ${T.BORDER}; border-radius: 6px; overflow: hidden;">
         <thead><tr style="background: ${T.NAVY};">
           <th style="padding: 9px 10px; text-align: left; font-size: 10.5px; color: white; font-family: ${T.FONT};">TCF ID</th>
@@ -1066,7 +1116,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
         <tbody>${breakupRows}${breakupTotalRow}</tbody>
       </table>` : '';
 
-    step4Html = sectionH(4, 'Per-deal payable') + `<tr><td style="padding: 4px 0 12px 0;">
+    step4Html = sectionH(nextNo(), 'Per-deal payable') + `<tr><td style="padding: 4px 0 12px 0;">
       ${bulletList([
         `For each deal we compute a <strong>Deal Incentive Share</strong>, then apply the rule that fits the deal.`
       ])}
@@ -1088,7 +1138,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       ${breakupTable}
     </td></tr>`;
   } else if (rm.deals.length > 0) {
-    step4Html = sectionH(4, 'Per-deal payable') + `<tr><td style="padding: 4px 0 12px 0;">
+    step4Html = sectionH(nextNo(), 'Per-deal payable') + `<tr><td style="padding: 4px 0 12px 0;">
       ${bulletList([
         c.overallScenario === 'below_target'
           ? `Neither Provisional nor Confirmed Deal Revenue crossed the Eligibility Target this cycle. All per-deal payables are \u20B90.`
@@ -1116,7 +1166,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
         Total Already Paid = <strong>${fmtINR(c.alreadyPaid)}</strong><br>
         <strong>Due Incentive (cash in bank) = ${fmtINR(c.fy27CashPayable)} \u2212 ${fmtINR(c.alreadyPaid)} = <span style="color:${dueColor};">${fmtINR(c.due)}</span></strong>
       </div>`;
-  const step5Html = sectionH(5, 'Due Incentive (cash in bank) after netting Already Paid') + `<tr><td style="padding: 4px 0 12px 0;">
+  const step5Html = sectionH(nextNo(), 'Due Incentive (cash in bank) after netting Already Paid') + `<tr><td style="padding: 4px 0 12px 0;">
     ${cumulativeBox}
     ${c.due < 0 ? `
       <div style="margin-top: 10px; padding: 12px 14px; background: ${T.RED_SOFT}; border-left: 3px solid ${T.RED}; border-radius: 3px;">
@@ -1131,24 +1181,24 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   let step6Html = '';
   if (c.due > 0) {
     if (rm.hasCrm) {
-      step6Html = sectionH(6, 'CRM release check') + `<tr><td style="padding: 4px 0 12px 0;">
+      step6Html = sectionH(nextNo(), 'CRM release check') + `<tr><td style="padding: 4px 0 12px 0;">
         <div style="padding: 12px 14px; background: ${T.GREEN_SOFT}; border-left: 3px solid ${T.GREEN}; border-radius: 3px;">
           <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 0;">
-            <strong style="color: ${T.GREEN_DEEP};">Release \u2713.</strong> You have a CRM-approved deal in the current or previous month, so the Due amount disburses this Dollar Day.
+            <strong style="color: ${T.GREEN_DEEP};">Release \u2713.</strong> You have a CRM-approved deal in the T-1 or T month (T = Dollar Day month), so the Due amount disburses this Dollar Day.
           </p>
         </div>
       </td></tr>`;
     } else {
-      step6Html = sectionH(6, 'CRM release check') + `<tr><td style="padding: 4px 0 12px 0;">
+      step6Html = sectionH(nextNo(), 'CRM release check') + `<tr><td style="padding: 4px 0 12px 0;">
         <div style="padding: 12px 14px; background: ${T.AMBER_SOFT}; border-left: 3px solid ${T.ORANGE}; border-radius: 3px;">
           <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 0;">
-            <strong style="color: ${T.ORANGE_DEEP};">Held - not lost.</strong> Payout requires a CRM-approved deal in the current or previous month. Your Due Incentive of <strong>${fmtINR(c.due)}</strong> will release automatically the next qualifying month. Nothing forfeited.
+            <strong style="background: #FDE047; color: ${T.INK}; padding: 1px 5px; border-radius: 3px;">Incentive Held</strong> as you don't have a CRM-approved deal in the T-1 or T month (T = Dollar Day month).<br>Your Due Incentive of <strong>${fmtINR(c.due)}</strong> will release automatically the next qualifying month.
           </p>
         </div>
       </td></tr>`;
     }
   } else {
-    step6Html = sectionH(6, 'CRM release check - not applicable') + `<tr><td style="padding: 4px 0 12px 0;">
+    step6Html = sectionH(nextNo(), 'CRM release check - not applicable') + `<tr><td style="padding: 4px 0 12px 0;">
         <div style="padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.MUTED}; border-radius: 3px;">
           <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 0;">
             The CRM check only matters when the Due amount is above \u20B90. Your Due amount is not positive this cycle, so nothing is disbursed regardless of CRM approval.
@@ -1164,7 +1214,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     // Reverse-calc'd Total Incentive for this disbursement = Due / 0.80
     const cashThisCycle = c.dueForRelease;
     const esopThisCycle = cashThisCycle * 0.25;
-    step7Html = sectionH(7, 'This Dollar Day disbursement') + `<tr><td style="padding: 4px 0 20px 0;">
+    step7Html = sectionH(nextNo(), 'This Dollar Day disbursement') + `<tr><td style="padding: 4px 0 20px 0;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; margin-top: 10px;">
         <tr>
           <td width="49%" style="background: ${T.GREEN_SOFT}; border: 1px solid ${T.GREEN}; border-radius: 6px; padding: 16px; text-align: center;">
@@ -1183,7 +1233,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     </td></tr>`;
   } else {
     const zeroNote = (c.due > 0 && !rm.hasCrm) ? 'Held until CRM approval' : 'No disbursement this cycle';
-    step7Html = sectionH(7, 'This Dollar Day disbursement') + `<tr><td style="padding: 4px 0 20px 0;">
+    step7Html = sectionH(nextNo(), 'This Dollar Day disbursement') + `<tr><td style="padding: 4px 0 20px 0;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; margin-top: 10px;">
         <tr>
           <td width="49%" style="background: ${T.NAVY_SOFT}; border: 1px solid ${T.BORDER_STRONG}; border-radius: 6px; padding: 16px; text-align: center;">

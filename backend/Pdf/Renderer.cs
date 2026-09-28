@@ -23,6 +23,9 @@ public class Renderer
     readonly JsonElement rm, c;
     readonly List<JsonElement> deals, results;
     readonly string month, range, scenario;
+    // Steps are numbered in the order they are drawn, so a skipped step never leaves a gap.
+    int stepNo;
+    int NextNo() => ++stepNo;
 
     public static byte[] Render(JsonElement rm) =>
         Document.Create(d => new Renderer(rm).Compose(d)).GeneratePdf();
@@ -39,16 +42,17 @@ public class Renderer
         scenario = c.Str("overallScenario");
     }
 
-    // ---------- rich text: **bold**  ^^red bold^^  {{gold}}  [[muted]] ----------
+    // ---------- rich text: **bold**  ^^red bold^^  {{gold}}  [[muted]]  <<yellow highlight>> ----------
     static void Rich(TextDescriptor t, string s, double px, string color = INK, bool mono = false)
     {
-        bool bold = false, red = false, gold = false, dim = false; var buf = "";
+        bool bold = false, red = false, gold = false, dim = false, hl = false; var buf = "";
         void Flush()
         {
             if (buf == "") return;
             var sp = t.Span(buf).FontSize(P(px)).FontFamily(mono ? MONO : SANS)
-                .FontColor(red ? RED_DEEP : gold ? GOLD : dim ? "#A5A9BB" : color);
-            if (bold || red) sp.Bold(); else if (mono) sp.Medium();
+                .FontColor(hl ? INK : red ? RED_DEEP : gold ? GOLD : dim ? "#A5A9BB" : color);
+            if (hl) sp.BackgroundColor("#FDE047");
+            if (bold || red || hl) sp.Bold(); else if (mono) sp.Medium();
             buf = "";
         }
         for (int i = 0; i < s.Length; i++)
@@ -57,6 +61,8 @@ public class Renderer
             else if (Tok("^^")) { Flush(); red = !red; i++; }
             else if (Tok("{{")) { Flush(); gold = true; i++; }
             else if (Tok("}}")) { Flush(); gold = false; i++; }
+            else if (Tok("<<")) { Flush(); hl = true; i++; }
+            else if (Tok(">>")) { Flush(); hl = false; i++; }
             else if (Tok("[[")) { Flush(); dim = true; i++; }
             else if (Tok("]]")) { Flush(); dim = false; i++; }
             else buf += s[i];
@@ -127,6 +133,7 @@ public class Renderer
                 });
                 card.Item().PaddingHorizontal(P(28)).Column(body =>
                 {
+                    stepNo = 0;
                     Hero(body);
                     var first = rm.Str("name").Split(' ')[0];
                     body.Item().PaddingTop(P(22)).Text(t => Rich(t, $"Hi {first},", 14));
@@ -153,7 +160,7 @@ public class Renderer
                 bg = GREEN_SOFT; border = GREEN; big = Fmt.InrNoSym(total);
                 formula = $"{Fmt.Inr(total)} = {Fmt.Inr(due)} (Cash in bank, 80%) + {Fmt.Inr(esop)} (ESOP, 20%)"; break;
             case "held_no_crm":
-                bg = AMBER_SOFT; border = ORANGE; formula = "₹0 disbursed this Dollar Day. See Step 6 for the held amount."; break;
+                bg = AMBER_SOFT; border = ORANGE; formula = $"₹0 disbursed this Dollar Day. See Step {(deals.Count > 0 ? 6 : 4)} for the held amount."; break;
             case "below_target": formula = "Cumulative revenue is below the eligibility target this cycle."; break;
             case "negative_due": label = "NO DISBURSEMENT THIS CYCLE"; formula = "Cumulative Payable is less than Already Paid - no clawback."; break;
             case "nil_due": label = "NO DISBURSEMENT THIS CYCLE"; formula = "Cumulative Payable exactly matches Already Paid."; break;
@@ -210,7 +217,7 @@ public class Renderer
     // ---------- steps 1-2 ----------
     void Step1(ColumnDescriptor s)
     {
-        SectionH(s, 1, "YTD Salary Cost and Eligibility Target");
+        SectionH(s, NextNo(), "YTD Salary Cost and Eligibility Target");
         Bullets(s,
             $"**YTD Salary Cost** = sum of your salaries in the elapsed months ({rm.Num("months")} months this cycle).",
             "**Eligibility Target** = 5 × YTD Salary Cost. Your revenue must cross this to earn any incentive.");
@@ -223,7 +230,7 @@ public class Renderer
 
     void Step2(ColumnDescriptor s)
     {
-        SectionH(s, 2, "Deals in this cycle");
+        SectionH(s, NextNo(), "Deals in this cycle");
         if (deals.Count == 0)
         {
             Bullets(s, $"You had **no deals** in {range}. Nothing to compute this cycle.");
@@ -249,7 +256,7 @@ public class Renderer
                 t.Cell().Element(BCell).AlignCenter().Text(d.Str("month") is "" ? "-" : d.Str("month")).FontSize(P(12)).FontColor(INK_SOFT);
                 Badge(t.Cell().Element(BCell), stage, StgBg(stage), StgFg(stage));
                 Badge(t.Cell().Element(BCell), type, type == "Focus" ? GREEN_SOFT : RED_SOFT, type == "Focus" ? GREEN_DEEP : RED_DEEP);
-                t.Cell().Element(BCell).AlignRight().Text(d.IsNull("collection") ? "-" : d.Num("collection") + "%").FontFamily(MONO).FontSize(P(12));
+                t.Cell().Element(BCell).AlignRight().Text(d.IsNull("collection") ? "-" : Fmt.Pct(d.Num("collection"))).FontFamily(MONO).FontSize(P(12));
             }
         });
     }
@@ -261,7 +268,7 @@ public class Renderer
     void Step3(ColumnDescriptor s)
     {
         if (deals.Count == 0) return;
-        SectionH(s, 3, "Both Incentives - Provisional and Confirmed");
+        SectionH(s, NextNo(), "Both Incentives - Provisional and Confirmed");
         Bullets(s, "Two incentives are computed side by side: **Provisional** (Counted + Confirmed + Collected deals) and **Confirmed** (Confirmed and Collected deals).");
 
         double target = c.Num("eligibilityTarget"), provBase = c.Num("provBase"), provInc = c.Num("provIncentive"),
@@ -285,7 +292,7 @@ public class Renderer
             Bullets(s, $"**Deals used:** {TcfList(provDeals)} ({provDeals.Count} deals - all Counted, Confirmed and Collected stages)",
                 $"**Eligibility Target (SMx 5×):** {Fmt.Inr(target)}",
                 $"**Total Provisional Incentive Deal Revenue:** {SumFormula(provDeals)} = {Fmt.Inr(provBase)}",
-                $"**Crosses target** by {Fmt.Inr(provBase - target)}");
+                provBase > target ? $"**Crosses target** by {Fmt.Inr(provBase - target)}" : "**Exactly at target** - 5% of target applies.");
             Slab(s, target, provBase, provInc, "Provisional Incentive");
         }
 
@@ -302,7 +309,7 @@ public class Renderer
         }
         else
         {
-            var cross = confBase > target ? $"**Crosses target** by {Fmt.Inr(confBase - target)}" : "**Exactly at target** - 5% of target applies, no excess";
+            var cross = confBase > target ? $"**Crosses target** by {Fmt.Inr(confBase - target)}" : "**Exactly at target** - 5% of target applies.";
             Bullets(s, $"**Deals used:** {TcfList(confDeals)} ({confDeals.Count} deals - only Confirmed and Collected stages)",
                 $"**Eligibility Target (SMx 5×):** {Fmt.Inr(target)}",
                 $"**Total Confirmed Incentive Deal Revenue:** {SumFormula(confDeals)} = {Fmt.Inr(confBase)}", cross);
@@ -353,7 +360,11 @@ public class Renderer
             });
             v.Item().PaddingTop(3).Row(r =>
             {
-                r.RelativeItem(tw).AlignCenter().Text(t => { t.Span($"5% × {Fmt.Lakh(target)} = ").FontFamily(MONO).FontSize(P(11.5)).FontColor(leftText); t.Span(Fmt.Inr(five)).FontFamily(MONO).Bold().FontSize(P(11.5)).FontColor(leftText); });
+                r.RelativeItem(tw).AlignCenter().Text(t =>
+                {
+                    if (state == "below_target") { t.Span("₹0").FontFamily(MONO).Bold().FontSize(P(11.5)).FontColor(leftText); return; }
+                    t.Span($"5% × {Fmt.Lakh(target)} = ").FontFamily(MONO).FontSize(P(11.5)).FontColor(leftText); t.Span(Fmt.Inr(five)).FontFamily(MONO).Bold().FontSize(P(11.5)).FontColor(leftText);
+                });
                 r.RelativeItem(ew).AlignCenter().Text(t => { t.Span($"40% × {(excess > 0 ? Fmt.Lakh(excess) : "₹0")} = ").FontFamily(MONO).FontSize(P(11.5)).FontColor(rightText); t.Span(Fmt.Inr(forty)).FontFamily(MONO).Bold().FontSize(P(11.5)).FontColor(rightText); });
             });
             string pillBg = state == "below_target" ? MUTED_BG : "#EFF4FA", pillBorder = state == "below_target" ? MUTED_BORDER : NAVY,
@@ -380,7 +391,10 @@ public class Renderer
                 r.RelativeItem().Background(NAVY_SOFT).Border(1.1f).BorderColor(NAVY).PaddingVertical(P(10)).PaddingHorizontal(4).Column(b =>
                 {
                     b.Item().AlignCenter().Text(st.label).Bold().FontSize(P(11.5)).FontColor(NAVY);
-                    b.Item().PaddingTop(2).AlignCenter().Text(st.sub).FontFamily(MONO).FontSize(P(10)).FontColor(INK_SOFT);
+                    if (st.sub.Contains("<<"))
+                        b.Item().PaddingTop(2).AlignCenter().Text(t => { t.AlignCenter(); Rich(t, st.sub, 10, INK_SOFT, true); });
+                    else
+                        b.Item().PaddingTop(2).AlignCenter().Text(st.sub).FontFamily(MONO).FontSize(P(10)).FontColor(INK_SOFT);
                 });
                 if (i < steps.Length - 1) r.ConstantItem(P(22)).AlignMiddle().AlignCenter().Text("→").FontFamily(MONO).Bold().FontSize(P(16)).FontColor(NAVY);
             }
@@ -398,7 +412,7 @@ public class Renderer
         double provInc = c.Num("provIncentive"), confInc = c.Num("confIncentive");
         if (deals.Count > 0 && (provInc > 0 || confInc > 0))
         {
-            SectionH(s, 4, "Per-deal payable");
+            SectionH(s, NextNo(), "Per-deal payable");
             Bullets(s, "For each deal we compute a **Deal Incentive Share**, then apply the rule that fits the deal.");
             if (provInc > 0)
             {
@@ -415,12 +429,12 @@ public class Renderer
             if (confInc > 0)
             {
                 SubHead(s, "Confirmed flow", 20);
-                Flow(s, new[] { ("Confirmed Incentive", Fmt.Inr(confInc)), ("Deal Incentive Share", "Incentive × Rev÷Total"), ("Payable", "Payout will be based on whichever is higher: 50% or actual collection.") });
+                Flow(s, new[] { ("Confirmed Incentive", Fmt.Inr(confInc)), ("Deal Incentive Share", "Incentive × Rev÷Total"), ("Payable", "<<Payout will be based on whichever is higher: 50% or actual collection.>>") });
                 FormulaCard(s, "CONFIRMED PAYABLE FORMULA", new[]
                 {
                     "Deal Incentive Share = Confirmed Incentive × (Deal Revenue ÷ Total Confirmed Incentive Deal Revenue)", "",
                     "[[Then per-deal:]]",
-                    "Payout will be based on whichever is higher: 50% or actual collection.",
+                    "<<Payout will be based on whichever is higher: 50% or actual collection.>>",
                 });
             }
             SubHead(s, "Per-deal payable table", 22);
@@ -429,7 +443,7 @@ public class Renderer
         }
         else if (deals.Count > 0)
         {
-            SectionH(s, 4, "Per-deal payable");
+            SectionH(s, NextNo(), "Per-deal payable");
             Bullets(s,
                 scenario == "below_target"
                     ? "Neither Provisional nor Confirmed Deal Revenue crossed the Eligibility Target this cycle. All per-deal payables are ₹0."
@@ -520,7 +534,7 @@ public class Renderer
                     else if (which == "confirmed")
                     {
                         col.Item().AlignCenter().Text("Confirmed").Bold().FontSize(P(10.5)).FontColor(ORANGE_DEEP);
-                        col.Item().AlignCenter().Text($"Collection {d.Num("collection")}%").FontSize(P(10.5)).FontColor(INK_SOFT);
+                        col.Item().AlignCenter().Text($"Collection {Fmt.Pct(d.Num("collection"))}").FontSize(P(10.5)).FontColor(INK_SOFT);
                     }
                     else
                     {
@@ -547,7 +561,7 @@ public class Renderer
     {
         s.Item().PaddingTop(P(20)).PaddingBottom(3).EnsureSpace(90).Text(t =>
         {
-            t.Span("Cash & ESOP breakup ").Bold().FontSize(P(13.5)).FontColor(INK);
+            t.Span("Monetary & ESOP breakup ").Bold().FontSize(P(13.5)).FontColor(INK);
             t.Span("- 80% cash in bank, 20% ESOP per deal").Medium().FontSize(P(11)).FontColor(INK_SOFT);
         });
         s.Item().Table(t =>
@@ -586,7 +600,7 @@ public class Renderer
         double due = c.Num("due"), fy27 = c.Num("fy27Payable"), cash = c.Num("fy27CashPayable"), paid = c.Num("alreadyPaid"), cum = c.Num("cumulativeCash");
         var back = c.GetProperty("backYear").Num("total"); bool hasBack = back > 0;
         string dueTag = due < 0 ? "^^" + Fmt.Inr(due) + "^^" : "**" + Fmt.Inr(due) + "**";
-        SectionH(s, 5, "Due Incentive (cash in bank) after netting Already Paid");
+        SectionH(s, NextNo(), "Due Incentive (cash in bank) after netting Already Paid");
         var dueColor = due < 0 ? RED_DEEP : due > 0 ? GREEN_DEEP : INK;
         var lines = new List<string> { $"FY27 Monetary Payable (80% of ₹{Fmt.InrNoSym(fy27)}) = **{Fmt.Inr(cash)}**" };
         if (hasBack) { lines.Add($"Prior Period Payable = **{Fmt.Inr(back)}**"); lines.Add($"Cumulative Monetary Payable = {Fmt.Inr(cash)} + {Fmt.Inr(back)} = **{Fmt.Inr(cum)}**"); }
@@ -609,16 +623,16 @@ public class Renderer
     {
         if (c.Num("due") <= 0)
         {
-            SectionH(s, 6, "CRM release check - not applicable");
+            SectionH(s, NextNo(), "CRM release check - not applicable");
             ColorBox(s, NAVY_SOFT, MUTED, "The CRM check only matters when the Due amount is above ₹0. Your Due amount is not positive this cycle, so nothing is disbursed regardless of CRM approval.");
             tail?.Invoke(s);
             return;
         }
-        SectionH(s, 6, "CRM release check");
+        SectionH(s, NextNo(), "CRM release check");
         if (rm.Bool("hasCrm"))
-            ColorBox(s, GREEN_SOFT, GREEN, "**Release ✓.** You have a CRM-approved deal in the current or previous month, so the Due amount disburses this Dollar Day.");
+            ColorBox(s, GREEN_SOFT, GREEN, "**Release ✓.** You have a CRM-approved deal in the T-1 or T month (T = Dollar Day month), so the Due amount disburses this Dollar Day.");
         else
-            ColorBox(s, AMBER_SOFT, ORANGE, $"**Held - not lost.** Payout requires a CRM-approved deal in the current or previous month. Your Due Incentive of **{Fmt.Inr(c.Num("due"))}** will release automatically the next qualifying month. Nothing forfeited.");
+            ColorBox(s, AMBER_SOFT, ORANGE, $"<<Incentive Held>> as you don't have a CRM-approved deal in the T-1 or T month (T = Dollar Day month).\nYour Due Incentive of **{Fmt.Inr(c.Num("due"))}** will release automatically the next qualifying month.");
         tail?.Invoke(s);
     });
 
@@ -628,7 +642,7 @@ public class Renderer
         bool zero = cash <= 0;
         string note = c.Num("due") > 0 && !rm.Bool("hasCrm") ? "Held until CRM approval" : "No disbursement this cycle";
         double esop = cash * 0.25;
-        SectionH(s, 7, "This Dollar Day disbursement");
+        SectionH(s, NextNo(), "This Dollar Day disbursement");
         s.Item().PaddingTop(10).ShowEntire().Column(b =>
         {
             b.Item().Row(r =>

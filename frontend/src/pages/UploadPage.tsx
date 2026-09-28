@@ -175,10 +175,9 @@ export default function UploadPage() {
                <div>
                  <dt>Period</dt>
                  <dd>
-                   <code>Months Elapsed</code>
                    <code>Dollar Day Date</code>
                  </dd>
-                 <p className="req-note">Months Elapsed is 1 to 12.</p>
+                 <p className="req-note">The period runs from April to the month before the Dollar Day.</p>
                </div>
                <div>
                  <dt>Payments</dt>
