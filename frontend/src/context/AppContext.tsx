@@ -1,7 +1,7 @@
 import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
 import { calculateIncentive, validateAndNormalize } from '../lib/engine.js';
 import type { Issue, Rm } from '../lib/engine.js';
-import { uploadWorkbook } from '../lib/api';
+import { uploadWorkbook } from '../lib/api.js';
 
 type ToastKind = '' | 'success' | 'err';
 

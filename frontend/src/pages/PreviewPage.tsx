@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { fmtINR, generateEmailHtml, generatePlainText } from '../lib/engine.js';
 import type { Rm } from '../lib/engine.js';
-import { downloadHtml } from '../lib/pdfExport';
-import { downloadServerPdf } from '../lib/serverPdf';
-import { useApp } from '../context/AppContext';
-import { Layout } from '../components/Layout';
+import { downloadHtml } from '../lib/pdfExport.js';
+import { downloadServerPdf } from '../lib/serverPdf.js';
+import { useApp } from '../context/AppContext.js';
+import { Layout } from '../components/Layout.js';
 
 type Filter = 'all' | 'positive' | 'provonly' | 'zero' | 'held' | 'negative';
 

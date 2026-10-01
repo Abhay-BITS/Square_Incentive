@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { fmtINR } from '../lib/engine.js';
-import { downloadHtmlZip } from '../lib/pdfExport';
-import { downloadServerPdfZip, type ZipProgress } from '../lib/serverPdf';
-import { useApp } from '../context/AppContext';
-import { Layout } from '../components/Layout';
-import { BackLink } from '../components/BackLink';
+import { downloadHtmlZip } from '../lib/pdfExport.js';
+import { downloadServerPdfZip, type ZipProgress } from '../lib/serverPdf.js';
+import { useApp } from '../context/AppContext.js';
+import { Layout } from '../components/Layout.js';
+import { BackLink } from '../components/BackLink.js';
 
 export default function ExportPage() {
   const { rms, toast } = useApp();

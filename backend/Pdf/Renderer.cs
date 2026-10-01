@@ -13,7 +13,8 @@ public class Renderer
         INK = "#1F2A44", INK_SOFT = "#475569", MUTED = "#64748B", GREEN = "#16A34A", GREEN_DEEP = "#166534",
         GREEN_SOFT = "#D1FAE5", ORANGE = "#E08A2B", ORANGE_DEEP = "#B45309", AMBER_SOFT = "#FEF3C7",
         RED = "#DC2626", RED_DEEP = "#B02E2E", RED_SOFT = "#FEE2E2", BG = "#F4F5F7", GOLD = "#FDB744",
-        MUTED_BG = "#F1F5F9", MUTED_BG2 = "#F8FAFC", MUTED_BORDER = "#CBD5E1", MUTED_TEXT = "#94A3B8";
+        MUTED_BG = "#F1F5F9", MUTED_BG2 = "#F8FAFC", MUTED_BORDER = "#CBD5E1", MUTED_TEXT = "#94A3B8",
+        LINK = "#1D4ED8";
     const string SANS = "Inter", MONO = "JetBrains Mono";
     const float PX = 0.68f;
     static float P(double px) => (float)(px * PX);
@@ -133,7 +134,7 @@ public class Renderer
                 {
                     stepNo = 0;
                     Hero(body);
-                    var first = rm.Str("name").Split(' ')[0];
+                    var first = rm.Str("name");   // full name in the greeting, not just the first word
                     body.Item().PaddingTop(P(22)).Text(t => Rich(t, $"Hi {first},", 14));
                     body.Item().PaddingTop(P(8)).Text(t => Rich(t, $"Below is your incentive breakdown for **{month} Dollar Day**.", 14));
                     Fy27Block(body);
@@ -211,12 +212,24 @@ public class Renderer
         });
     }
 
+    static readonly string[] MonthNames =
+    {
+        "April", "May", "June", "July", "August", "September",
+        "October", "November", "December", "January", "February", "March",
+    };
+
     // ---------- steps 1-2 ----------
+    string JoinSuffix()
+    {
+        var idx = (int)rm.Num("joinMonthIndex");
+        return idx > 0 ? $", since joining in {MonthNames[idx]}" : "";
+    }
+
     void Step1(ColumnDescriptor s)
     {
         SectionH(s, NextNo(), "YTD Salary Cost and Eligibility Target");
         Bullets(s,
-            $"**YTD Salary Cost** = sum of your salaries in the elapsed months ({rm.Num("months")} months this cycle).",
+            $"**YTD Salary Cost** = sum of your salaries in the elapsed months ({rm.Num("activeMonths")} months this cycle{JoinSuffix()}).",
             "**Eligibility Target** = 5 × YTD Salary Cost. Your revenue must cross this to earn any incentive.");
         MonoBox(s, new[]
         {
@@ -248,7 +261,7 @@ public class Renderer
             foreach (var d in deals)
             {
                 var stage = d.Str("stage"); var type = d.Str("type");
-                t.Cell().Element(BCell).Text(d.Str("tcfId")).FontFamily(MONO).FontSize(P(11.5));
+                t.Cell().Element(BCell).Text(tt => TcfSpan(tt, d, 11.5, false));
                 t.Cell().Element(BCell).AlignRight().Text(Fmt.Inr(d.Num("revenue"))).FontFamily(MONO).FontSize(P(12));
                 t.Cell().Element(BCell).AlignCenter().Text(d.Str("month") is "" ? "-" : d.Str("month")).FontSize(P(12)).FontColor(INK_SOFT);
                 Badge(t.Cell().Element(BCell), stage, StgBg(stage), StgFg(stage));
@@ -449,12 +462,27 @@ public class Renderer
         }
     }
 
+    static string BeatsUrl(string linkId) => $"https://beats.squareyards.com/sales/tcf.aspx?id={linkId}";
+
+    void TcfSpan(TextDescriptor t, JsonElement d, double fontSize, bool bold)
+    {
+        var tcfId = d.Str("tcfId");
+        var hasLink = !d.IsNull("tcfLinkId");
+        var span = hasLink ? t.Hyperlink(tcfId, BeatsUrl(d.Str("tcfLinkId"))) : t.Span(tcfId);
+        span.FontFamily(MONO).FontSize(P(fontSize)).FontColor(hasLink ? LINK : INK);
+        // QuestPDF 2024.10.3's Underline() on a hyperlink span doesn't actually draw a line in
+        // this renderer, so the link color alone is the visual cue.
+        if (bold) span.Bold();
+    }
+
     void TcfCell(IContainer x, JsonElement d)
     {
         var share = d.Num("sharePct");
+        var project = d.Str("projectName");
         x.Element(BCell).Column(col =>
         {
-            col.Item().Text(d.Str("tcfId")).FontFamily(MONO).Bold().FontSize(P(9)).LineHeight(1.1f);
+            col.Item().Text(t => TcfSpan(t, d, 9, true));
+            if (project != "") col.Item().Text(project).FontSize(P(8)).FontColor(INK_SOFT);
             if (share != 100) col.Item().Text($"Share {share}%").Bold().FontSize(P(9)).FontColor(ORANGE_DEEP);
         });
     }
@@ -570,7 +598,7 @@ public class Renderer
             t.Cell().Element(HCell).AlignRight().Text(x => { x.Span("ESOP ").Bold().FontSize(P(10.5)).FontColor(Colors.White); x.Span("(20%)").Medium().FontSize(P(10.5)).FontColor("#B3B7C7"); });
             foreach (var dr in results.Where(r => r.Num("payable") > 0))
             {
-                t.Cell().Element(BCell).Text(dr.GetProperty("deal").Str("tcfId")).FontFamily(MONO).Bold().FontSize(P(10.5));
+                t.Cell().Element(BCell).Text(tt => TcfSpan(tt, dr.GetProperty("deal"), 10.5, true));
                 t.Cell().Element(BCell).AlignRight().Text(Fmt.Inr(dr.Num("payable"))).FontFamily(MONO).Bold().FontSize(P(12)).FontColor(NAVY);
                 t.Cell().Element(BCell).AlignRight().Text(Fmt.Inr(dr.Num("cashPayable"))).FontFamily(MONO).Bold().FontSize(P(12)).FontColor(GREEN_DEEP);
                 t.Cell().Element(BCell).AlignRight().Text(Fmt.Inr(dr.Num("esopPayable"))).FontFamily(MONO).Bold().FontSize(P(12)).FontColor(ORANGE_DEEP);

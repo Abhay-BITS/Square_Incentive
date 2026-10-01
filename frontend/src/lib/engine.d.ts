@@ -22,6 +22,7 @@ export interface Issue {
 
 export interface Deal {
   tcfId: string;
+  tcfLinkId: string | null;
   projectName: string;
   revenue: number;
   month: string;
