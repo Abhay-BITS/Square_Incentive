@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { fmtINR } from '../lib/engine.js';
 import { downloadHtmlZip } from '../lib/pdfExport.js';
 import { downloadServerPdfZip, type ZipProgress } from '../lib/serverPdf.js';
@@ -9,6 +9,7 @@ import { BackLink } from '../components/BackLink.js';
 
 export default function ExportPage() {
   const { rms, toast } = useApp();
+  const navigate = useNavigate();
   const [zipProgress, setZipProgress] = useState<ZipProgress | null>(null);
 
   const diag = useMemo(() => {
@@ -98,6 +99,22 @@ export default function ExportPage() {
            </div>
            <button className="btn ghost" onClick={handleDownloadHtmlZip}>
              Download HTML ZIP
+           </button>
+         </div>
+
+         <div className="export-option">
+           <div className="export-option-body">
+             <h3>Email to RMs</h3>
+             <p>
+               Send each RM their PDF incentive statement by email, with CC to their reporting chain.
+               Tracks progress so you can resume across the Google Workspace 2,000/day limit.
+             </p>
+             <div className="use-with">
+               Uses: <strong>incentive@squareyards.com</strong> via SMTP
+             </div>
+           </div>
+           <button className="btn primary" onClick={() => navigate('/send')}>
+             Send emails
            </button>
          </div>
 

@@ -63,6 +63,11 @@ function normType(s) {
 }
 function normMonth(s) {
   if (!s) return null;
+  if (s instanceof Date && !isNaN(s.getTime())) return SALARY_MONTHS[((s.getMonth() + 9) % 12)];
+  if (typeof s === 'number') {
+    const d = new Date(Date.UTC(1899, 11, 30 + s));
+    if (!isNaN(d.getTime())) return SALARY_MONTHS[((d.getUTCMonth() + 9) % 12)];
+  }
   // Strip a trailing year suffix such as "-26", "-2026", "/26" (e.g. "Apr-26" -> "Apr").
   const v = String(s).trim().replace(/[\s\-\/]\d{2,4}$/, '');
   // Try match against 3-letter month abbrev
@@ -218,6 +223,8 @@ function validateAndNormalize(rmRows, dlRows) {
     const ddDate = pick(r, 'Dollar Day Date','DD Date','Dollar Day');
     // New v10 fields
     const priorPayable = pick(r, 'Prior Period Final Payable','Prior Period Payable','Back Payable FY24');
+    const emailId = pick(r, 'EmailIDOfficial','Email ID Official','Email','EmailId','Official Email');
+    const costFy2627 = pick(r, 'Cost_FY2627','Cost FY2627','CostFY2627','YTD Cost');
 
     const salaries = SALARY_MONTHS.map(m => {
       const v = pickSalary(r, m);
@@ -231,26 +238,33 @@ function validateAndNormalize(rmRows, dlRows) {
 
     // Months in the period come from the Dollar Day (April to the month before it); the Months Elapsed column is ignored.
     const validMonths = monthsFromDollarDay(fmtDate(ddDate)) || 1;
-    // The first month (from April) with real salary money is treated as the RM's join month;
-    // every month before it is "not joined yet" (₹0, no error). The calculation - YTD Salary Cost,
-    // the covered-period label, and the Deal Month window - then starts from that join month.
+
+    // If Cost_FY2627 is provided, use it directly as YTD cost (exact prorated payroll).
+    // Otherwise fall back to summing individual salary columns (legacy format).
+    const parsedCostFy = costFy2627 !== null ? parseNum(costFy2627) : null;
+    const hasCostDirect = parsedCostFy !== null && !isNaN(parsedCostFy) && parsedCostFy >= 0;
+
     let joinMonthIndex = validMonths;
-    for (let i = 0; i < validMonths; i++) {
-      const s = salaries[i];
-      if (s !== null && isNaN(s)) {
-        issues.push({level:'err',loc:empCode,msg:'Salary '+SALARY_MONTHS[i]+' missing or invalid - must be filled for every month in the period.'});
-      } else if (s !== null && s < 0) {
-        issues.push({level:'err',loc:empCode,msg:'Salary '+SALARY_MONTHS[i]+' is negative (got "'+s+'").'});
-      } else if (s === null || s === 0) {
-        // Not yet joined this month - ₹0 added to YTD Salary Cost, no warning shown.
-      } else if (joinMonthIndex === validMonths) {
-        joinMonthIndex = i;   // first month with real salary money
+    if (!hasCostDirect) {
+      for (let i = 0; i < validMonths; i++) {
+        const s = salaries[i];
+        if (s !== null && isNaN(s)) {
+          issues.push({level:'err',loc:empCode,msg:'Salary '+SALARY_MONTHS[i]+' missing or invalid - must be filled for every month in the period.'});
+        } else if (s !== null && s < 0) {
+          issues.push({level:'err',loc:empCode,msg:'Salary '+SALARY_MONTHS[i]+' is negative (got "'+s+'").'});
+        } else if (s === null || s === 0) {
+          // Not yet joined this month
+        } else if (joinMonthIndex === validMonths) {
+          joinMonthIndex = i;
+        }
       }
+      for (let i = validMonths; i < 12; i++) {
+        if (salaries[i] !== null && !isNaN(salaries[i])) issues.push({level:'warn',loc:empCode,msg:'Salary '+SALARY_MONTHS[i]+' provided but only '+validMonths+' months in the period - will be ignored.'});
+      }
+    } else {
+      joinMonthIndex = 0;
     }
     const activeMonths = Math.max(0, validMonths - joinMonthIndex);
-    for (let i = validMonths; i < 12; i++) {
-      if (salaries[i] !== null && !isNaN(salaries[i])) issues.push({level:'warn',loc:empCode,msg:'Salary '+SALARY_MONTHS[i]+' provided but only '+validMonths+' months in the period - will be ignored.'});
-    }
 
     const apN = parseNum(alreadyPaid);
     if (alreadyPaid !== null && (isNaN(apN) || apN < 0)) issues.push({level:'warn',loc:empCode,msg:'Total Already Paid treated as 0.'});
@@ -279,12 +293,14 @@ function validateAndNormalize(rmRows, dlRows) {
       vertical: String(vertical),
       salaries,
       months: validMonths,
-      joinMonthIndex,      // 0 = joined by April (normal case); >0 = joined partway through the period
-      activeMonths,        // months actually worked this cycle (validMonths - joinMonthIndex)
-      alreadyPaid: Math.max(0, apN || 0),   // now: total already paid across ALL periods
+      joinMonthIndex,
+      activeMonths,
+      ytdCostDirect: hasCostDirect ? parsedCostFy : null,
+      alreadyPaid: Math.max(0, apN || 0),
       hasCrm: normYesNo(hasCrmRaw),
       ddDate: fmtDate(ddDate),
-      backYearPayables,                      // {fy24, h1FY26, h2FY26, total}
+      backYearPayables,
+      email: emailId ? String(emailId).trim() : '',
       deals: [],
     };
     rmMap[rm.empCode] = rm;
@@ -296,7 +312,7 @@ function validateAndNormalize(rmRows, dlRows) {
     const rowNum = idx + 2;
     const rmId = pick(r, 'Employee Code','Emp Code','RM ID','RMID');
     const tcfId = pick(r, 'TCF Number','TCFNumber','TCF ID','TCFID','Deal ID','ID');
-    const tcfLinkIdRaw = pick(r, 'TCF ID','TCFID','Tcf Id');
+    const tcfLinkIdRaw = pick(r, 'TCF ID','TCFID','Tcf Id','tcfidd');
     const projectName = pick(r, 'Project Name','Deal Name','Project','Name','ProductName') || '';
     const revenue = pick(r, 'Revenue','Amount');
     const dealMonth = pick(r, 'Deal Month','Month','deal_month');
@@ -312,7 +328,7 @@ function validateAndNormalize(rmRows, dlRows) {
     // Revenue can legitimately be 0 (e.g. a deal logged with no revenue yet); only a blank,
     // non-numeric, or negative value is a real problem.
     if (isNaN(rev) || rev < 0) { issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Revenue invalid.'}); return; }
-    const stage = normStage(stageRaw);
+    let stage = normStage(stageRaw);
     const type = normType(typeRaw);
     const month = normMonth(dealMonth);
     if (!stage) { issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Stage must be Counted/Logged In, Confirmed, or Collected (with or without "(Count)" suffix).'}); return; }
@@ -321,8 +337,8 @@ function validateAndNormalize(rmRows, dlRows) {
     else {
       const mi = SALARY_MONTHS.indexOf(month);
       const rmDeal = rmMap[rmId];
-      if (mi < rmDeal.joinMonthIndex) { issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Deal Month "'+month+'" is before this RM\'s join month - deals can\'t predate joining.'}); return; }
-      else if (mi >= rmDeal.months) { issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Deal Month "'+month+'" is outside the '+rmDeal.months+' month(s) in this RM\'s period.'}); return; }
+      if (mi < rmDeal.joinMonthIndex) { issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Deal Month "'+month+'" is before this RM\'s join month - included in calculation.'}); }
+      else if (mi >= rmDeal.months) { issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Deal Month "'+month+'" is outside the '+rmDeal.months+' month(s) in this RM\'s period - included in calculation.'}); }
     }
 
 
@@ -334,7 +350,9 @@ function validateAndNormalize(rmRows, dlRows) {
         issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed deal has no Collection %; treated as 0%.'});
         collection = 0;
       } else if (c === 100) {
-        issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed at 100% - use Collected stage instead.'}); return;
+        issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed at 100% collection - treating as Collected.'});
+        stage = 'Collected';
+        collection = 100;
       } else if (c < 0 || c > 99) {
         issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed needs Collection 0-99 (use Collected for 100%).'}); return;
       } else {
@@ -343,7 +361,9 @@ function validateAndNormalize(rmRows, dlRows) {
     } else if (stage === 'Collected') {
       // Collected is always 100%. A different value is an error.
       const c = parseNum(collectionRaw);
-      if (collectionRaw !== null && collectionRaw !== '' && (isNaN(c) || c !== 100)) {
+      if (collectionRaw !== null && collectionRaw !== '' && !isNaN(c) && c >= 99 && c < 100) {
+        issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has Collection '+fmtPct(c)+' (not exactly 100%) - treating as 100%.'});
+      } else if (collectionRaw !== null && collectionRaw !== '' && (isNaN(c) || c < 99)) {
         issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal must have Collection 100% (got "'+collectionRaw+'").'}); return;
       }
       if (collectionRaw === null || collectionRaw === '') {
@@ -351,13 +371,20 @@ function validateAndNormalize(rmRows, dlRows) {
       }
       collection = 100;
     } else if (stage === 'Counted') {
-      // Counted deals don't use a collection % at all; any value present is ignored and
-      // treated as 0%, with a warning rather than blocking the row.
       const c = parseNum(collectionRaw);
       if (collectionRaw !== null && collectionRaw !== '' && !isNaN(c) && c > 0) {
-        issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Counted deal has Collection '+fmtPct(c)+' - ignored, treated as 0%.'});
+        if (c === 100) {
+          issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Logged In deal with 100% collection - treating as Collected.'});
+          stage = 'Collected';
+          collection = 100;
+        } else {
+          issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Logged In deal with '+fmtPct(c)+' collection - treating as Confirmed.'});
+          stage = 'Confirmed';
+          collection = c;
+        }
+      } else {
+        collection = 0;
       }
-      collection = 0;
     }
 
     // Normalize Self/Team (default Self if blank)
@@ -387,6 +414,7 @@ function validateAndNormalize(rmRows, dlRows) {
     const tcfLinkId = (/^tcf/i.test(tcfIdStr.trim()) && tcfLinkIdRaw !== null && /^\d+$/.test(String(tcfLinkIdRaw).trim()))
       ? String(tcfLinkIdRaw).trim() : null;
 
+    const isLoggedIn = /logged\s*in/i.test(String(stageRaw).replace(/\s*\(\s*count\s*\)\s*$/i, '').trim());
     rmMap[rmId].deals.push({
       tcfId: tcfIdStr,
       tcfLinkId,             // numeric Beats id, or null if this deal can't be linked
@@ -396,6 +424,7 @@ function validateAndNormalize(rmRows, dlRows) {
       stage, type, collection,
       selfTeam,             // 'Self' or 'Team'
       sharePct,             // 0-100 (default 100)
+      isLoggedIn,           // true if original DealStatus was Logged In / LoggedIn
     });
     joinedCount++;
   });
@@ -405,7 +434,9 @@ function validateAndNormalize(rmRows, dlRows) {
 
 // ---------- Calc ----------
 function calculateIncentive(rm) {
-  const ytdCost = rm.salaries.slice(0, rm.months).reduce((s, v) => s + (v || 0), 0);
+  const ytdCost = rm.ytdCostDirect !== null && rm.ytdCostDirect !== undefined
+    ? rm.ytdCostDirect
+    : rm.salaries.slice(0, rm.months).reduce((s, v) => s + (v || 0), 0);
   const eligibilityTarget = 5 * ytdCost;
 
   // Team deals are EXCLUDED from Provisional and Confirmed bases (RM earns no incentive on team deals)
@@ -414,7 +445,13 @@ function calculateIncentive(rm) {
   const provIncentive = provCrossed ? 0.05 * eligibilityTarget + 0.40 * (provBase - eligibilityTarget) : 0;
 
   const confDeals = rm.deals.filter(d => (d.stage === 'Confirmed' || d.stage === 'Collected') && d.selfTeam !== 'Team');
-  const confBase = confDeals.reduce((s, d) => s + d.revenue, 0);
+  // LOGGEDIN deals with collection>0% contribute NR×coll% to ConfBase (not full NR).
+  // LOGGEDIN deals with collection=0% stay provisional and contribute 0 to ConfBase.
+  const confBase = confDeals.reduce((s, d) => {
+    if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
+    if (d.isLoggedIn && d.collection === 0) return s;
+    return s + d.revenue;
+  }, 0);
   const confCrossed = confBase >= eligibilityTarget && confBase > 0 && eligibilityTarget > 0;
   const confIncentive = confCrossed ? 0.05 * eligibilityTarget + 0.40 * (confBase - eligibilityTarget) : 0;
 
@@ -429,8 +466,10 @@ function calculateIncentive(rm) {
     }
     // Every counted/confirmed/collected deal gets a Provisional Deal Incentive Share
     const provShare = provBase > 0 ? provIncentive * (d.revenue / provBase) : 0;
-    // Confirmed Share only for Confirmed / Collected deals
-    const confShare = (d.stage !== 'Counted' && confBase > 0) ? confIncentive * (d.revenue / confBase) : 0;
+    // Confirmed Share only for Confirmed / Collected deals.
+    // LOGGEDIN deals contribute NR×coll% to confBase, so their share is based on that contribution.
+    const confContrib = (d.isLoggedIn && d.collection > 0) ? d.revenue * (d.collection / 100) : d.revenue;
+    const confShare = (d.stage !== 'Counted' && confBase > 0) ? confIncentive * (confContrib / confBase) : 0;
 
     // Determine which incentive applies and, if none, WHY none
     let whichApplies, payable = 0, calcNote = '', noReason = '';
@@ -450,8 +489,10 @@ function calculateIncentive(rm) {
     } else {
       // Confirmed or Collected
       if (confIncentive > 0) {
+        // LOGGEDIN deals with coll>0%: collection is already baked into confContrib/confShare,
+        // so earned payout = 100% of confShare. Regular deals use max(50%, collection%).
         const rawPct = d.collection / 100;
-        const pct = Math.max(0.5, rawPct);
+        const pct = (d.isLoggedIn && d.collection > 0) ? 1.0 : Math.max(0.5, rawPct);
         const confPay = pct * confShare;
         const advPay = (d.type === 'Focus' && provIncentive > 0) ? 0.25 * provShare : 0;
         if (advPay > confPay) {
@@ -461,7 +502,9 @@ function calculateIncentive(rm) {
         } else {
           whichApplies = 'confirmed';
           payable = confPay;
-          calcNote = fmtPct(pct * 100) + (rawPct < 0.5 ? ' (floor)' : '') + ' × ' + fmtINR(confShare);
+          calcNote = (d.isLoggedIn && d.collection > 0)
+            ? '100% × ' + fmtINR(confShare) + ' (Logged In)'
+            : fmtPct(pct * 100) + (rawPct < 0.5 ? ' (floor)' : '') + ' × ' + fmtINR(confShare);
         }
       } else if (d.type === 'Focus' && provIncentive > 0) {
         whichApplies = 'provisional';
@@ -532,8 +575,8 @@ function calculateIncentive(rm) {
   else overallScenario = 'positive';
 
   const coverage = computeCoveredRange(rm.ddDate, rm.joinMonthIndex);
-  const uniqueSalaries = new Set(rm.salaries.slice(0, rm.months));
-  const salaryConstant = uniqueSalaries.size === 1;
+  const uniqueSalaries = new Set(rm.salaries.slice(0, rm.months).filter(v => v !== null));
+  const salaryConstant = rm.ytdCostDirect !== null && rm.ytdCostDirect !== undefined ? true : uniqueSalaries.size <= 1;
 
   return {
     ytdCost, eligibilityTarget,
@@ -562,10 +605,7 @@ function calculateIncentive(rm) {
 // PDF/EMAIL TEMPLATE v3 - structured, bulleted, Priya-example style
 // ============================================================
 function generateEmailSubject(rm, c) {
-  const m = c.ddLabel || 'this cycle';
-  if (c.overallScenario === 'positive' || c.overallScenario === 'provisional_only') return 'Your ' + m + ' Dollar Day incentive: ' + fmtINR(c.dueForRelease);
-  if (c.overallScenario === 'held_no_crm') return 'Your ' + m + ' Dollar Day incentive (held for CRM approval)';
-  return 'Your ' + m + ' Dollar Day breakdown';
+  return 'September Dollar Day - Incentive Calculation - ' + rm.empCode;
 }
 function generateEmailPreheader(rm, c) {
   if (c.overallScenario === 'positive' || c.overallScenario === 'provisional_only') return 'Your ' + c.ddLabel + ' Dollar Day calculation, step by step.';
@@ -896,7 +936,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   // ============ STEP 1 ============
   const step1Html = sectionH(nextNo(), 'YTD Salary Cost and Eligibility Target') + `<tr><td style="padding: 4px 0 12px 0;">
     ${bulletList([
-      `<strong>YTD Salary Cost</strong> = sum of your salaries in the elapsed months (${rm.activeMonths} months this cycle` + (rm.joinMonthIndex > 0 ? ', since joining in ' + MONTH_NAMES[SALARY_MONTHS[rm.joinMonthIndex]] : '') + ').',
+      `<strong>YTD Salary Cost</strong> = ` + (rm.ytdCostDirect !== null && rm.ytdCostDirect !== undefined ? 'your cumulative salary cost for the period.' : 'sum of your salaries in the elapsed months (' + rm.activeMonths + ' months this cycle' + (rm.joinMonthIndex > 0 ? ', since joining in ' + MONTH_NAMES[SALARY_MONTHS[rm.joinMonthIndex]] : '') + ').'),
       `<strong>Eligibility Target</strong> = 5 \u00D7 YTD Salary Cost. Your revenue must cross this to earn any incentive.`
     ])}
     <div style="font-family: ${T.MONO}; font-size: 13px; color: ${T.INK}; padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.NAVY}; border-radius: 3px; line-height: 1.7;">
@@ -914,15 +954,16 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   } else {
     let rows = '';
     rm.deals.forEach(d => {
-      const stgBg = d.stage === 'Collected' ? T.GREEN_SOFT : d.stage === 'Confirmed' ? T.AMBER_SOFT : d.stage === 'Not counted' ? T.RED_SOFT : '#EEF2F7';
-      const stgFg = d.stage === 'Collected' ? T.GREEN_DEEP : d.stage === 'Confirmed' ? T.ORANGE_DEEP : d.stage === 'Not counted' ? T.RED_DEEP : T.INK_SOFT;
+      const stageLabel = d.isLoggedIn ? 'Logged In' : d.stage;
+      const stgBg = d.isLoggedIn ? '#DBEAFE' : d.stage === 'Collected' ? T.GREEN_SOFT : d.stage === 'Confirmed' ? T.AMBER_SOFT : d.stage === 'Not counted' ? T.RED_SOFT : '#EEF2F7';
+      const stgFg = d.isLoggedIn ? '#1E40AF' : d.stage === 'Collected' ? T.GREEN_DEEP : d.stage === 'Confirmed' ? T.ORANGE_DEEP : d.stage === 'Not counted' ? T.RED_DEEP : T.INK_SOFT;
       const typBg = d.type === 'Focus' ? T.GREEN_SOFT : T.RED_SOFT;
       const typFg = d.type === 'Focus' ? T.GREEN_DEEP : T.RED_DEEP;
       rows += `<tr>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.MONO}; font-size: 11.5px; color: ${T.INK};">${tcfCell(d)}</td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.MONO}; font-size: 12px; text-align: right; color: ${T.INK};">${fmtINR(d.revenue)}</td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.FONT}; font-size: 12px; text-align: center; color: ${T.INK_SOFT};">${d.month || '-'}</td>
-        <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; text-align: center;"><span style="background: ${stgBg}; color: ${stgFg}; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">${d.stage}</span></td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; text-align: center;"><span style="background: ${stgBg}; color: ${stgFg}; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">${stageLabel}</span></td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; text-align: center;"><span style="background: ${typBg}; color: ${typFg}; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">${d.type}</span></td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.MONO}; font-size: 12px; text-align: right; color: ${T.INK};">${d.collection !== null ? fmtPct(d.collection) : '-'}</td>
       </tr>`;
@@ -952,9 +993,14 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   const confDealCount = confDeals.length;
 
   // Helper: comma-separated TCF list with stage
-  const tcfListWithStage = (deals) => deals.map(d => `${escapeHtml(d.tcfId)} (${d.stage})`).join(', ');
+  const tcfListWithStage = (deals) => deals.map(d => `${escapeHtml(d.tcfId)} (${d.isLoggedIn ? 'Logged In' : d.stage})`).join(', ');
   // Helper: sum formula like "TCF-001 (₹5L) + TCF-002 (₹5L) + ... = ₹25L"
   const sumFormula = (deals) => deals.map(d => `${escapeHtml(d.tcfId)} (${fmtL(d.revenue)})`).join(' + ');
+  // For Confirmed base: LOGGEDIN deals show NR×coll% contribution
+  const confSumFormula = (deals) => deals.map(d => {
+    if (d.isLoggedIn && d.collection > 0) return `${escapeHtml(d.tcfId)} (${fmtL(d.revenue)} × ${fmtPct(d.collection)} = ${fmtL(d.revenue * d.collection / 100)})`;
+    return `${escapeHtml(d.tcfId)} (${fmtL(d.revenue)})`;
+  }).join(' + ');
 
   let provBlock;
   if (rm.deals.length === 0) {
@@ -972,7 +1018,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     provBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 12px 0 6px 0; font-weight: 700;">Provisional Incentive</p>
       ${bulletList([
-        `<strong>Deals used:</strong> ${tcfListWithStage(provDeals)} (${provDealCount} deals - all Counted, Confirmed and Collected stages)`,
+        `<strong>Deals used:</strong> ${tcfListWithStage(provDeals)} (${provDealCount} deals - all Counted, Confirmed, Collected and Logged In stages)`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
         `<strong>Total Provisional Incentive Deal Revenue:</strong> ${sumFormula(provDeals)} = ${fmtINR(c.provBase)}`,
         `<strong style="color: ${T.RED_DEEP};">Did not cross target</strong> \u2192 Provisional Incentive = \u20B90.`
@@ -982,7 +1028,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     provBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 12px 0 6px 0; font-weight: 700;">Provisional Incentive</p>
       ${bulletList([
-        `<strong>Deals used:</strong> ${tcfListWithStage(provDeals)} (${provDealCount} deals - all Counted, Confirmed and Collected stages)`,
+        `<strong>Deals used:</strong> ${tcfListWithStage(provDeals)} (${provDealCount} deals - all Counted, Confirmed, Collected and Logged In stages)`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
         `<strong>Total Provisional Incentive Deal Revenue:</strong> ${sumFormula(provDeals)} = ${fmtINR(c.provBase)}`,
         c.provBase > c.eligibilityTarget
@@ -1007,9 +1053,9 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     confBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 22px 0 6px 0; font-weight: 700;">Confirmed Incentive</p>
       ${bulletList([
-        `<strong>Deals used:</strong> ${tcfListWithStage(confDeals)} (${confDealCount} deals - only Confirmed and Collected stages)`,
+        `<strong>Deals used:</strong> ${tcfListWithStage(confDeals)} (${confDealCount} deals - only Confirmed, Collected and Logged In stages)`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
-        `<strong>Total Confirmed Incentive Deal Revenue:</strong> ${sumFormula(confDeals)} = ${fmtINR(c.confBase)}`,
+        `<strong>Total Confirmed Incentive Deal Revenue:</strong> ${confSumFormula(confDeals)} = ${fmtINR(c.confBase)}`,
         `<strong style="color: ${T.RED_DEEP};">Did not cross target</strong> \u2192 Confirmed Incentive = \u20B90.`
       ])}
       ${slabVisual(c.eligibilityTarget, c.confBase, 0, 'Confirmed Incentive')}`;
@@ -1020,9 +1066,9 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     confBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 22px 0 6px 0; font-weight: 700;">Confirmed Incentive</p>
       ${bulletList([
-        `<strong>Deals used:</strong> ${tcfListWithStage(confDeals)} (${confDealCount} deals - only Confirmed and Collected stages)`,
+        `<strong>Deals used:</strong> ${tcfListWithStage(confDeals)} (${confDealCount} deals - only Confirmed, Collected and Logged In stages)`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
-        `<strong>Total Confirmed Incentive Deal Revenue:</strong> ${sumFormula(confDeals)} = ${fmtINR(c.confBase)}`,
+        `<strong>Total Confirmed Incentive Deal Revenue:</strong> ${confSumFormula(confDeals)} = ${fmtINR(c.confBase)}`,
         crossStatus
       ])}
       ${slabVisual(c.eligibilityTarget, c.confBase, c.confIncentive, 'Confirmed Incentive')}`;
@@ -1031,7 +1077,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   const step3Html = rm.deals.length === 0 ? '' :
     sectionH(nextNo(), 'Both Incentives - Provisional and Confirmed') + `<tr><td style="padding: 4px 0 12px 0;">
       ${bulletList([
-        `Two incentives are computed side by side: <strong>Provisional</strong> (Counted + Confirmed + Collected deals) and <strong>Confirmed</strong> (Confirmed and Collected deals).`
+        `Two incentives are computed side by side: <strong>Provisional</strong> (all deals incl. Logged In) and <strong>Confirmed</strong> (Confirmed, Collected and Logged In deals).`
       ])}
       ${provBlock}
       ${confBlock}
@@ -1078,7 +1124,10 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           'Deal Incentive Share = Confirmed Incentive \u00D7 (Deal Revenue \u00F7 Total Confirmed Incentive Deal Revenue)',
           '',
           '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
-          HL('Payout will be based on whichever is higher: 50% or actual collection.')
+          HL('Payout will be based on whichever is higher: 50% or actual collection.'),
+          '',
+          '<span style="color: rgba(255,255,255,0.7);">Logged In deals:</span>',
+          'Revenue \u00D7 Collection% contributes to Confirmed Base. Payout = 100% of Deal Incentive Share.'
         ])}
       `;
     }
@@ -1133,8 +1182,10 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       const confApplies = (dr.whichApplies === 'confirmed');
       const provShareCell = shareCellHtml(c.provIncentive, dr.provShare, d.revenue, c.provBase, provApplies);
       const showConf = (d.stage !== 'Counted' && dr.confShare > 0);
+      // For LOGGEDIN deals, the confirmed contribution is NR×coll%, not full NR
+      const confDealRev = (d.isLoggedIn && d.collection > 0) ? d.revenue * (d.collection / 100) : d.revenue;
       const confShareCell = showConf
-        ? shareCellHtml(c.confIncentive, dr.confShare, d.revenue, c.confBase, confApplies)
+        ? shareCellHtml(c.confIncentive, dr.confShare, confDealRev, c.confBase, confApplies)
         : `<td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; text-align: right; color: ${T.MUTED}; font-size: 14px;">-</td>`;
 
       // Which cell
@@ -1142,7 +1193,9 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       if (dr.whichApplies === 'provisional') {
         whichCell = '<strong style="color: ' + T.GREEN_DEEP + ';">Provisional</strong><br><span style="color: ' + T.INK_SOFT + '; font-size: 10.5px;">25% focus advance</span>';
       } else if (dr.whichApplies === 'confirmed') {
-        whichCell = '<strong style="color: ' + T.ORANGE_DEEP + ';">Confirmed</strong><br><span style="color: ' + T.INK_SOFT + '; font-size: 10.5px;">Collection ' + fmtPct(d.collection) + '</span>';
+        whichCell = d.isLoggedIn
+          ? '<strong style="color: #1E40AF;">Logged In</strong><br><span style="color: ' + T.INK_SOFT + '; font-size: 10.5px;">NR×' + fmtPct(d.collection) + ' in base, 100% payout</span>'
+          : '<strong style="color: ' + T.ORANGE_DEEP + ';">Confirmed</strong><br><span style="color: ' + T.INK_SOFT + '; font-size: 10.5px;">Collection ' + fmtPct(d.collection) + '</span>';
       } else {
         whichCell = '<strong style="color: ' + T.MUTED + ';">No incentive</strong>' +
                     (dr.noReason ? '<br><span style="color: ' + T.MUTED + '; font-size: 10.5px; font-style: italic;">' + escapeHtml(dr.noReason) + '</span>' : '');
@@ -1156,7 +1209,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       rows += `<tr>
         <td style="padding: 10px 8px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.MONO}; font-size: 10px; color: ${T.INK};">${tcfCell(d, { withProject: true })}${d.sharePct !== undefined && d.sharePct !== 100 ? `<br><span style="font-family: ${T.FONT}; font-size: 9px; color: ${T.ORANGE_DEEP}; font-weight: 700;">Share ${d.sharePct}%</span>` : ''}</td>
         <td style="padding: 10px 8px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.MONO}; font-size: 10.5px; text-align: right; color: ${T.INK}; white-space: nowrap;">${fmtINR(d.revenue)}</td>
-        <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.FONT}; font-size: 11px; color: ${T.INK_SOFT};">${d.stage}<br>${d.type}</td>
+        <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.FONT}; font-size: 11px; color: ${T.INK_SOFT};">${d.isLoggedIn ? 'Logged In' : d.stage}<br>${d.type}</td>
         ${provShareCell}
         ${confShareCell}
         <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.FONT}; font-size: 10.5px; text-align: center; line-height: 1.35;">${whichCell}</td>

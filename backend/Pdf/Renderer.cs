@@ -112,8 +112,9 @@ public class Renderer
         x.AlignCenter().Background(bg).PaddingHorizontal(4).PaddingVertical(1.5f)
             .Text(text).Bold().FontSize(P(10.5)).FontColor(fg);
 
-    static string StgBg(string s) => s == "Collected" ? GREEN_SOFT : s == "Confirmed" ? AMBER_SOFT : s == "Not counted" ? RED_SOFT : "#EEF2F7";
-    static string StgFg(string s) => s == "Collected" ? GREEN_DEEP : s == "Confirmed" ? ORANGE_DEEP : s == "Not counted" ? RED_DEEP : INK_SOFT;
+    static string StgLabel(JsonElement d) => d.Bool("isLoggedIn") ? "Logged In" : d.Str("stage");
+    static string StgBg(JsonElement d) => d.Bool("isLoggedIn") ? "#DBEAFE" : d.Str("stage") == "Collected" ? GREEN_SOFT : d.Str("stage") == "Confirmed" ? AMBER_SOFT : d.Str("stage") == "Not counted" ? RED_SOFT : "#EEF2F7";
+    static string StgFg(JsonElement d) => d.Bool("isLoggedIn") ? "#1E40AF" : d.Str("stage") == "Collected" ? GREEN_DEEP : d.Str("stage") == "Confirmed" ? ORANGE_DEEP : d.Str("stage") == "Not counted" ? RED_DEEP : INK_SOFT;
 
     // ---------- main ----------
     public void Compose(IDocumentContainer doc) =>
@@ -260,11 +261,11 @@ public class Renderer
             }
             foreach (var d in deals)
             {
-                var stage = d.Str("stage"); var type = d.Str("type");
+                var type = d.Str("type");
                 t.Cell().Element(BCell).Text(tt => TcfSpan(tt, d, 11.5, false));
                 t.Cell().Element(BCell).AlignRight().Text(Fmt.Inr(d.Num("revenue"))).FontFamily(MONO).FontSize(P(12));
                 t.Cell().Element(BCell).AlignCenter().Text(d.Str("month") is "" ? "-" : d.Str("month")).FontSize(P(12)).FontColor(INK_SOFT);
-                Badge(t.Cell().Element(BCell), stage, StgBg(stage), StgFg(stage));
+                Badge(t.Cell().Element(BCell), StgLabel(d), StgBg(d), StgFg(d));
                 Badge(t.Cell().Element(BCell), type, type == "Focus" ? GREEN_SOFT : RED_SOFT, type == "Focus" ? GREEN_DEEP : RED_DEEP);
                 t.Cell().Element(BCell).AlignRight().Text(d.IsNull("collection") ? "-" : Fmt.Pct(d.Num("collection"))).FontFamily(MONO).FontSize(P(12));
             }
@@ -272,14 +273,14 @@ public class Renderer
     }
 
     // ---------- step 3 ----------
-    string TcfList(IEnumerable<JsonElement> ds) => string.Join(", ", ds.Select(d => $"{d.Str("tcfId")} ({d.Str("stage")})"));
+    string TcfList(IEnumerable<JsonElement> ds) => string.Join(", ", ds.Select(d => $"{d.Str("tcfId")} ({StgLabel(d)})"));
     string SumFormula(IEnumerable<JsonElement> ds) => string.Join(" + ", ds.Select(d => $"{d.Str("tcfId")} ({Fmt.Lakh(d.Num("revenue"))})"));
 
     void Step3(ColumnDescriptor s)
     {
         if (deals.Count == 0) return;
         SectionH(s, NextNo(), "Both Incentives - Provisional and Confirmed");
-        Bullets(s, "Two incentives are computed side by side: **Provisional** (Counted + Confirmed + Collected deals) and **Confirmed** (Confirmed and Collected deals).");
+        Bullets(s, "Two incentives are computed side by side: **Provisional** (all deals incl. Logged In) and **Confirmed** (Confirmed, Collected and Logged In deals).");
 
         double target = c.Num("eligibilityTarget"), provBase = c.Num("provBase"), provInc = c.Num("provIncentive"),
             confBase = c.Num("confBase"), confInc = c.Num("confIncentive");
@@ -291,7 +292,7 @@ public class Renderer
             Bullets(s, "**Deals used:** none - all deals are Not counted.", $"**Eligibility Target (SMx 5×):** {Fmt.Inr(target)}", "**Provisional Incentive = ₹0.**");
         else if (provInc == 0)
         {
-            Bullets(s, $"**Deals used:** {TcfList(provDeals)} ({provDeals.Count} deals - all Counted, Confirmed and Collected stages)",
+            Bullets(s, $"**Deals used:** {TcfList(provDeals)} ({provDeals.Count} deals - all Counted, Confirmed, Collected and Logged In stages)",
                 $"**Eligibility Target (SMx 5×):** {Fmt.Inr(target)}",
                 $"**Total Provisional Incentive Deal Revenue:** {SumFormula(provDeals)} = {Fmt.Inr(provBase)}",
                 "^^Did not cross target^^ → Provisional Incentive = ₹0.");
@@ -299,7 +300,7 @@ public class Renderer
         }
         else
         {
-            Bullets(s, $"**Deals used:** {TcfList(provDeals)} ({provDeals.Count} deals - all Counted, Confirmed and Collected stages)",
+            Bullets(s, $"**Deals used:** {TcfList(provDeals)} ({provDeals.Count} deals - all Counted, Confirmed, Collected and Logged In stages)",
                 $"**Eligibility Target (SMx 5×):** {Fmt.Inr(target)}",
                 $"**Total Provisional Incentive Deal Revenue:** {SumFormula(provDeals)} = {Fmt.Inr(provBase)}",
                 provBase > target ? $"**Crosses target** by {Fmt.Inr(provBase - target)}" : "**Exactly at target** - 5% of target applies.");
@@ -311,7 +312,7 @@ public class Renderer
             Bullets(s, "**Deals used:** none - no Confirmed or Collected deals this cycle.", $"**Eligibility Target (SMx 5×):** {Fmt.Inr(target)}", "**Confirmed Incentive = ₹0.**");
         else if (confInc == 0)
         {
-            Bullets(s, $"**Deals used:** {TcfList(confDeals)} ({confDeals.Count} deals - only Confirmed and Collected stages)",
+            Bullets(s, $"**Deals used:** {TcfList(confDeals)} ({confDeals.Count} deals - only Confirmed, Collected and Logged In stages)",
                 $"**Eligibility Target (SMx 5×):** {Fmt.Inr(target)}",
                 $"**Total Confirmed Incentive Deal Revenue:** {SumFormula(confDeals)} = {Fmt.Inr(confBase)}",
                 "^^Did not cross target^^ → Confirmed Incentive = ₹0.");
@@ -320,7 +321,7 @@ public class Renderer
         else
         {
             var cross = confBase > target ? $"**Crosses target** by {Fmt.Inr(confBase - target)}" : "**Exactly at target** - 5% of target applies.";
-            Bullets(s, $"**Deals used:** {TcfList(confDeals)} ({confDeals.Count} deals - only Confirmed and Collected stages)",
+            Bullets(s, $"**Deals used:** {TcfList(confDeals)} ({confDeals.Count} deals - only Confirmed, Collected and Logged In stages)",
                 $"**Eligibility Target (SMx 5×):** {Fmt.Inr(target)}",
                 $"**Total Confirmed Incentive Deal Revenue:** {SumFormula(confDeals)} = {Fmt.Inr(confBase)}", cross);
             Slab(s, target, confBase, confInc, "Confirmed Incentive");
@@ -544,10 +545,12 @@ public class Renderer
                     continue;
                 }
                 var which = dr.Str("whichApplies");
-                t.Cell().Element(BCell).Text(x => { x.Span(stage).FontSize(P(11)).FontColor(INK_SOFT); x.Span("\n" + d.Str("type")).FontSize(P(11)).FontColor(INK_SOFT); });
+                t.Cell().Element(BCell).Text(x => { x.Span(StgLabel(d)).FontSize(P(11)).FontColor(INK_SOFT); x.Span("\n" + d.Str("type")).FontSize(P(11)).FontColor(INK_SOFT); });
                 ShareCell(t.Cell(), provInc, dr.Num("provShare"), d.Num("revenue"), provBase, which == "provisional");
+                var isLI = d.Bool("isLoggedIn") && d.Num("collection") > 0;
+                var confDealRev = isLI ? d.Num("revenue") * (d.Num("collection") / 100) : d.Num("revenue");
                 if (stage != "Counted" && dr.Num("confShare") > 0)
-                    ShareCell(t.Cell(), confInc, dr.Num("confShare"), d.Num("revenue"), confBase, which == "confirmed");
+                    ShareCell(t.Cell(), confInc, dr.Num("confShare"), confDealRev, confBase, which == "confirmed");
                 else t.Cell().Element(BCell).AlignRight().Text("-").FontSize(P(14)).FontColor(MUTED);
                 t.Cell().Element(BCell).AlignCenter().Column(col =>
                 {
@@ -558,8 +561,16 @@ public class Renderer
                     }
                     else if (which == "confirmed")
                     {
-                        col.Item().AlignCenter().Text("Confirmed").Bold().FontSize(P(10.5)).FontColor(ORANGE_DEEP);
-                        col.Item().AlignCenter().Text($"Collection {Fmt.Pct(d.Num("collection"))}").FontSize(P(10.5)).FontColor(INK_SOFT);
+                        if (isLI)
+                        {
+                            col.Item().AlignCenter().Text("Logged In").Bold().FontSize(P(10.5)).FontColor("#1E40AF");
+                            col.Item().AlignCenter().Text($"NR×{Fmt.Pct(d.Num("collection"))} in base, 100% payout").FontSize(P(10.5)).FontColor(INK_SOFT);
+                        }
+                        else
+                        {
+                            col.Item().AlignCenter().Text("Confirmed").Bold().FontSize(P(10.5)).FontColor(ORANGE_DEEP);
+                            col.Item().AlignCenter().Text($"Collection {Fmt.Pct(d.Num("collection"))}").FontSize(P(10.5)).FontColor(INK_SOFT);
+                        }
                     }
                     else
                     {

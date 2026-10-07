@@ -4,6 +4,7 @@ import UploadPage from './pages/UploadPage';
 import ValidationPage from './pages/ValidationPage';
 import PreviewPage from './pages/PreviewPage';
 import ExportPage from './pages/ExportPage';
+import SendPage from './pages/SendPage';
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="/validate" element={<ValidationPage />} />
           <Route path="/preview" element={<PreviewPage />} />
           <Route path="/export" element={<ExportPage />} />
+          <Route path="/send" element={<SendPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

@@ -1,13 +1,38 @@
-# Data and reference files are not committed
-*.xlsx
-*.xls
-Incentive_PDF_Tool.html
-
-# Build output and local config
+# Dependencies
 node_modules/
+
+# Build output
 dist/
 bin/
 obj/
+
+# Excel data files
+*.xlsx
+*.xls
+*.csv
+
+# Environment & secrets
 .env
+.env.*
+appsettings.Development.json
+
+# OS files
 .DS_Store
+Thumbs.db
+~$*
+
+# IDE
+.vscode/
+.idea/
+*.suo
 *.user
+
+# Temp / logs
+*.log
+*.tmp
+
+# HTML standalone tool
+Incentive_PDF_Tool.html
+
+# Edge case tests
+edge_case_tests/

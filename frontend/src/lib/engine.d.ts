@@ -45,6 +45,8 @@ export interface Rm {
   hasCrm: boolean;
   ddDate: string;
   backYearPayables: { total: number };
+  ytdCostDirect: number | null;
+  email: string;
   deals: Deal[];
   calc: Calc;
 }
