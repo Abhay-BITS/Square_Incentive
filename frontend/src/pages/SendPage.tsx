@@ -8,8 +8,6 @@ import {
   parseCcCsv,
   sendEmail,
   testSmtp,
-  type CcEntry,
-  type SendResult,
 } from '../lib/emailApi.js';
 import { useApp } from '../context/AppContext.js';
 import { Layout } from '../components/Layout.js';
@@ -42,7 +40,6 @@ export default function SendPage() {
   const { rms, toast } = useApp();
 
   const ddShort = rms[0]?.calc?.ddShort || '';
-  const ddLabel = rms[0]?.calc?.ddLabel || '';
 
   const [ccMap, setCcMap] = useState<Map<string, string[]>>(new Map());
   const [ccLoaded, setCcLoaded] = useState(false);
