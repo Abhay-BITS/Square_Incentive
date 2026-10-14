@@ -366,8 +366,8 @@ function validateAndNormalize(rmRows, dlRows) {
 
     if (stage === 'Confirmed') {
       const c = collNorm;
-      if (collectionRaw === null || collectionRaw === '' || isNaN(c) || c <= 0) {
-        issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed needs positive collection.'}); return;
+      if (collectionRaw === null || collectionRaw === '' || isNaN(c) || c < 0) {
+        issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed needs valid collection.'}); return;
       } else if (c === 100) {
         issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed at 100% collection - treating as Collected.'});
         stage = 'Collected';
