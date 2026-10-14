@@ -247,11 +247,11 @@ function validateAndNormalize(rmRows, dlRows) {
     const tier = pick(r, 'Tier');
     const vertical = pick(r, 'Vertical') || 'Primary Sales';
     const alreadyPaid = pick(r, 'Total Already Paid','Already Paid YTD','Already Paid');
-    const hasPipRaw = pick(r, 'Has PIP','PIP','PIP Status');
+    const hasPipRaw = pick(r, 'Has PIP','PIP','PIP Status','onPIP','On PIP');
     const ddDate = pick(r, 'Dollar Day Date','DD Date','Dollar Day');
     const priorPayable = pick(r, 'Prior Period Final Payable','Prior Period Payable','Back Payable FY24');
     const emailId = pick(r, 'EmailIDOfficial','Email ID Official','Email','EmailId','Official Email');
-    const teamCostRaw = pick(r, 'Self+Team YTD Cost','Team YTD Cost','SelfTeamYTDCost','Self+Team Cost','Team Cost','Self & Team YTD Cost');
+    const teamCostRaw = pick(r, 'Self+Team YTD Cost','Team YTD Cost','SelfTeamYTDCost','Self+Team Cost','Team Cost','Self & Team YTD Cost','YTD Team + Self','YTD Team+Self');
 
     if (!empCode) { issues.push({level:'err',loc:'RMs row '+rowNum,msg:'Missing Employee Code (primary key).'}); return; }
     if (rmMap[empCode]) { issues.push({level:'err',loc:'RMs row '+rowNum,msg:'Duplicate Employee Code "'+empCode+'".'}); return; }
