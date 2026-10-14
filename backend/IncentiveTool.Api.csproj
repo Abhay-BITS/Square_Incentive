@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Allows running locally on a machine that only has a newer major .NET runtime
+         installed. No effect once a matching net8.0 runtime is present (e.g. Render). -->
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
+    <PackageReference Include="MailKit" Version="4.18.1" />
+    <PackageReference Include="QuestPDF" Version="2024.10.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Pdf\fonts\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Pdf\logo-white.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

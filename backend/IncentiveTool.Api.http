@@ -1,0 +1,6 @@
+@IncentiveTool.Api_HostAddress = http://localhost:5105
+
+GET {{IncentiveTool.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
