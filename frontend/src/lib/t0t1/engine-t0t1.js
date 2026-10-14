@@ -360,24 +360,23 @@ function validateAndNormalize(rmRows, dlRows) {
 
 
     let collection = null;
+    // Normalize collection: if value is in (0,1] range, treat as fraction (e.g. 0.5 → 50%)
+    let collNorm = parseNum(collectionRaw);
+    if (!isNaN(collNorm) && collNorm > 0 && collNorm <= 1) collNorm = Math.round(collNorm * 10000) / 100;
+
     if (stage === 'Confirmed') {
-      // Confirmed accepts 0-99. If input is 100 → suggest Collected instead. If missing/invalid → 0.
-      const c = parseNum(collectionRaw);
-      if (collectionRaw === null || collectionRaw === '' || isNaN(c)) {
-        issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed deal has no Collection %; treated as 0%.'});
-        collection = 0;
+      const c = collNorm;
+      if (collectionRaw === null || collectionRaw === '' || isNaN(c) || c <= 0) {
+        issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed needs positive collection.'}); return;
       } else if (c === 100) {
         issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed at 100% collection - treating as Collected.'});
         stage = 'Collected';
         collection = 100;
-      } else if (c < 0 || c > 99) {
-        issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Confirmed needs Collection 0-99 (use Collected for 100%).'}); return;
       } else {
         collection = c;
       }
     } else if (stage === 'Collected') {
-      // Collected is always 100%. A different value is an error.
-      const c = parseNum(collectionRaw);
+      const c = collNorm;
       if (collectionRaw !== null && collectionRaw !== '' && !isNaN(c) && c >= 99 && c < 100) {
         issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has Collection '+fmtPct(c)+' (not exactly 100%) - treating as 100%.'});
       } else if (collectionRaw !== null && collectionRaw !== '' && (isNaN(c) || c < 99)) {
@@ -388,7 +387,7 @@ function validateAndNormalize(rmRows, dlRows) {
       }
       collection = 100;
     } else if (stage === 'Counted') {
-      const c = parseNum(collectionRaw);
+      const c = collNorm;
       if (collectionRaw !== null && collectionRaw !== '' && !isNaN(c) && c > 0) {
         if (c === 100) {
           issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Logged In deal with 100% collection - treating as Collected.'});
