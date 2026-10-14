@@ -1,15 +1,27 @@
+import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAppT2T3 } from '../../context/AppContextT2T3';
 import { LayoutT2T3 } from '../../components/LayoutT2T3';
 import { BackLink } from '../../components/BackLink';
 
+type Filter = 'all' | 'warn' | 'err';
+
 export default function ValidationPageT2T3() {
   const { rms, issues, joinedCount } = useAppT2T3();
   const navigate = useNavigate();
+  const [filter, setFilter] = useState<Filter>('all');
   if (rms.length === 0) return <Navigate to="/t2" replace />;
 
   const warnCount = issues.filter((i) => i.level === 'warn').length;
   const errCount = issues.filter((i) => i.level === 'err').length;
+  const filtered = filter === 'all' ? issues : issues.filter((i) => i.level === filter);
+
+  const statStyle = (active: boolean): React.CSSProperties => ({
+    cursor: 'pointer',
+    outline: active ? '2px solid var(--accent, #3B82F6)' : 'none',
+    outlineOffset: -2,
+    transition: 'outline 0.15s',
+  });
 
   return (
     <LayoutT2T3>
@@ -53,15 +65,47 @@ export default function ValidationPageT2T3() {
              <div className="val-stat-label">Deals joined</div>
              <div className="val-stat-value">{joinedCount}</div>
            </div>
-           <div className={'val-stat' + (warnCount > 0 ? ' warn' : '')}>
+           <div
+             className={'val-stat' + (warnCount > 0 ? ' warn' : '')}
+             style={statStyle(filter === 'warn')}
+             onClick={() => setFilter(filter === 'warn' ? 'all' : 'warn')}
+             title="Click to filter warnings"
+           >
              <div className="val-stat-label">Warnings</div>
              <div className="val-stat-value">{warnCount}</div>
            </div>
-           <div className={'val-stat' + (errCount > 0 ? ' err' : '')}>
+           <div
+             className={'val-stat' + (errCount > 0 ? ' err' : '')}
+             style={statStyle(filter === 'err')}
+             onClick={() => setFilter(filter === 'err' ? 'all' : 'err')}
+             title="Click to filter errors"
+           >
              <div className="val-stat-label">Errors</div>
              <div className="val-stat-value">{errCount}</div>
            </div>
          </div>
+
+         {filter !== 'all' && (
+           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+             <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+               Showing {filter === 'warn' ? 'warnings' : 'errors'} only ({filtered.length})
+             </span>
+             <button
+               onClick={() => setFilter('all')}
+               style={{
+                 background: 'none',
+                 border: '1px solid var(--border)',
+                 borderRadius: 4,
+                 padding: '2px 10px',
+                 fontSize: 12,
+                 cursor: 'pointer',
+                 color: 'var(--ink-soft)',
+               }}
+             >
+               Show all
+             </button>
+           </div>
+         )}
 
          {issues.length === 0 ? (
            <div className="issue-list">
@@ -70,9 +114,9 @@ export default function ValidationPageT2T3() {
          ) : (
            <div className="issue-list">
              <h4>
-               {issues.length} issue{issues.length !== 1 ? 's' : ''} to review
+               {filtered.length} issue{filtered.length !== 1 ? 's' : ''} to review
              </h4>
-             {issues.map((i, idx) => (
+             {filtered.map((i, idx) => (
                <div className="issue" key={idx}>
                  <span className={'issue-tag ' + i.level}>{i.level === 'err' ? 'Error' : 'Warning'}</span>
                  <span className="issue-msg">
