@@ -457,9 +457,9 @@ function calculateIncentive(rm) {
     return s + d.revenue;
   }, 0);
   const teamCrossed = teamConfBase >= teamTarget && teamConfBase > 0 && teamTarget > 0;
-  const teamBelowAmt = teamBelowPct * Math.min(teamConfBase, teamTarget);
-  const teamAboveAmt = teamAbovePct * Math.max(0, teamConfBase - teamTarget);
-  const teamIncentive = (teamTarget > 0 || teamConfBase > 0) ? teamBelowAmt + teamAboveAmt : 0;
+  const teamBelowAmt = teamCrossed ? teamBelowPct * teamTarget : 0;
+  const teamAboveAmt = teamCrossed ? teamAbovePct * Math.max(0, teamConfBase - teamTarget) : 0;
+  const teamIncentive = teamCrossed ? teamBelowAmt + teamAboveAmt : 0;
 
   // All team deals (for display)
   const teamAllDeals = rm.deals.filter(d => d.selfTeam === 'Team' && d.stage !== 'Not counted');
