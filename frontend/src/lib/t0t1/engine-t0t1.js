@@ -622,7 +622,7 @@ function calculateIncentive(rm) {
 // PDF/EMAIL TEMPLATE v3 - structured, bulleted, Priya-example style
 // ============================================================
 function generateEmailSubject(rm, c) {
-  return 'September Dollar Day - Incentive Calculation - ' + rm.empCode;
+  return 'September Dollar Day - Incentive Statement - ' + rm.empCode;
 }
 function generateEmailPreheader(rm, c) {
   if (c.overallScenario === 'positive' || c.overallScenario === 'provisional_only') return 'Your ' + c.ddLabel + ' Dollar Day calculation, step by step.';
@@ -1442,7 +1442,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
 
         <tr><td style="padding: 22px 28px 4px 28px;">
           <p style="font-family: ${T.FONT}; font-size: 14px; color: ${T.INK}; line-height: 1.6; margin: 0;">Hi ${escapeHtml(first)},</p>
-          <p style="font-family: ${T.FONT}; font-size: 14px; color: ${T.INK}; line-height: 1.6; margin: 8px 0 0 0;">Below is your incentive breakdown for <strong>${month} Dollar Day</strong>.</p>
+          <p style="font-family: ${T.FONT}; font-size: 14px; color: ${T.INK}; line-height: 1.6; margin: 8px 0 0 0;">Below is your Incentive Statement for <strong>${month} Dollar Day</strong>.</p>
         </td></tr>
 
         ${buildFY27Block(c, rangeLabel, T, stepsHtmlFY27)}
@@ -1473,7 +1473,7 @@ function generatePlainText(rm) {
   const rangeLabel = c.coverage ? c.coverage.rangeLabel : '';
   const lines = [];
   lines.push(`Hi ${first},`, '');
-  lines.push(`Below is your incentive breakdown for ${c.ddLabel} Dollar Day.`);
+  lines.push(`Below is your Incentive Statement for ${c.ddLabel} Dollar Day.`);
   lines.push(`YTD Salary Cost and deals from ${rangeLabel} considered.`);
   lines.push('');
   if (c.overallScenario === 'positive' || c.overallScenario === 'provisional_only') {

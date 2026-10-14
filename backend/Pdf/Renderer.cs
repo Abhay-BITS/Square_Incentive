@@ -142,7 +142,7 @@ public class Renderer
                     Hero(body);
                     var first = rm.Str("name");   // full name in the greeting, not just the first word
                     body.Item().PaddingTop(P(22)).Text(t => Rich(t, $"Hi {first},", 14));
-                    body.Item().PaddingTop(P(8)).Text(t => Rich(t, $"Below is your incentive breakdown for **{month} Dollar Day**.", 14));
+                    body.Item().PaddingTop(P(8)).Text(t => Rich(t, $"Below is your Incentive Statement for **{month} Dollar Day**.", 14));
                     Fy27Block(body);
                     PriorCard(body);
                     // The footer travels with the last step so it can never sit alone on a page.

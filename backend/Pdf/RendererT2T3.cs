@@ -217,7 +217,7 @@ public class RendererT2T3
                     Hero(body);
                     var first = rm.Str("name");
                     body.Item().PaddingTop(P(22)).Text(t => Rich(t, $"Hi {first},", 14));
-                    body.Item().PaddingTop(P(8)).Text(t => Rich(t, $"Below is your incentive breakdown for **{month} Dollar Day**.", 14));
+                    body.Item().PaddingTop(P(8)).Text(t => Rich(t, $"Below is your Incentive Statement for **{month} Dollar Day**.", 14));
                     FyBlock(body);
                     PriorCard(body);
                     Step8(body);

@@ -406,7 +406,7 @@ export default function SendPageT2T3() {
               )}
               {displayRms.length === 0 && (
                 <p className="hint" style={{ textAlign: 'center', padding: 24 }}>
-                  No RMs match this filter.
+                  No employees match this filter.
                 </p>
               )}
             </div>
