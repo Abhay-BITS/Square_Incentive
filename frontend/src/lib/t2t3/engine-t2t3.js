@@ -558,8 +558,8 @@ function calculateIncentive(rm) {
   const dueForRelease = !rm.hasPip && due > 0 ? due : 0;
   const cash = dueForRelease;
   const equity = 0;
-  const totalIncentiveOverall = cumulativeCash > 0 ? cumulativeCash / 0.80 : 0;
-  const totalEsopOverall = cumulativeCash > 0 ? cumulativeCash * 0.25 : 0;
+  const totalIncentiveOverall = fyPayable + backYearTotal;
+  const totalEsopOverall = fyEsopPayable;
 
   // Scenario
   let overallScenario;
@@ -1010,7 +1010,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   let step3Html = '';
   if (teamDeals.length > 0) {
     const teamConfDealsList = c.teamConfDeals || teamDeals.filter(d => d.stage === 'Confirmed' || d.stage === 'Collected');
-    const crossNote = Math.abs(c.teamConfBase - c.teamTarget) < 0.5 && c.teamConfBase > 0
+    const crossNote = c.teamCrossed && Math.abs(c.teamConfBase - c.teamTarget) < 0.5
       ? `<strong>Exactly at target</strong> – ${belowLabel} of target applies.`
       : c.teamCrossed
         ? `<strong style="color: ${T.GREEN_DEEP};">Crosses target</strong> by ${fmtINR(c.teamConfBase - c.teamTarget)}`
