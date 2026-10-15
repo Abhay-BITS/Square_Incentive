@@ -234,9 +234,36 @@ export default function SendPage() {
             </div>
           </div>
 
+          {/* Test Email */}
+          <div className="send-section">
+            <h3>2. Test Email</h3>
+            <p className="hint" style={{ marginBottom: 8 }}>Send a test email with the first employee's PDF to verify delivery.</p>
+            <div className="smtp-row">
+              <label>
+                Send test to
+                <input
+                  type="email"
+                  value={testEmail}
+                  onChange={(e) => { setTestEmail(e.target.value); setTestResult(null); }}
+                  placeholder="your.email@example.com"
+                  className="input"
+                />
+              </label>
+              <button
+                className="btn secondary"
+                onClick={handleTestEmail}
+                disabled={testSending || !testEmail || sendableRms.length === 0}
+              >
+                {testSending ? <><span className="spinner"></span> Sending…</> : 'Send test'}
+              </button>
+              {testResult?.success && <span className="smtp-badge ok">Sent via {testResult.via}</span>}
+              {testResult && !testResult.success && <span className="smtp-badge fail">Failed</span>}
+            </div>
+          </div>
+
           {/* Backup SMTP */}
           <div className="send-section">
-            <h3>2. Backup SMTP (optional)</h3>
+            <h3>3. Backup SMTP (optional)</h3>
             <p className="hint" style={{ marginBottom: 8 }}>SendGrid is the primary sender. SMTP is used as a fallback only if SendGrid fails.</p>
             <div className="smtp-row">
               <label>
@@ -263,7 +290,7 @@ export default function SendPage() {
 
           {/* Stats */}
           <div className="send-section">
-            <h3>3. Send list</h3>
+            <h3>4. Send list</h3>
             <div className="diag">
               <div className="diag-row">
                 <span className="k">Total employees in input file</span>
@@ -299,33 +326,6 @@ export default function SendPage() {
                   <span className="v failed-count">{failedMap.size}</span>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Test Email */}
-          <div className="send-section">
-            <h3>4. Test Email</h3>
-            <p className="hint" style={{ marginBottom: 8 }}>Send a test email with the first employee's PDF to verify delivery.</p>
-            <div className="smtp-row">
-              <label>
-                Send test to
-                <input
-                  type="email"
-                  value={testEmail}
-                  onChange={(e) => { setTestEmail(e.target.value); setTestResult(null); }}
-                  placeholder="your.email@example.com"
-                  className="input"
-                />
-              </label>
-              <button
-                className="btn secondary"
-                onClick={handleTestEmail}
-                disabled={testSending || !testEmail || sendableRms.length === 0}
-              >
-                {testSending ? <><span className="spinner"></span> Sending…</> : 'Send test'}
-              </button>
-              {testResult?.success && <span className="smtp-badge ok">Sent via {testResult.via}</span>}
-              {testResult && !testResult.success && <span className="smtp-badge fail">Failed</span>}
             </div>
           </div>
 
