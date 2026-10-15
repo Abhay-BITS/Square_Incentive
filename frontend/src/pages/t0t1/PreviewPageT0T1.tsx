@@ -33,6 +33,7 @@ export default function PreviewPage() {
   const { rms, activeRmId, setActiveRmId, toast } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('all');
+  const [tierFilter, setTierFilter] = useState<'all' | 'T0' | 'T1'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [serverBusy, setServerBusy] = useState(false);
 
@@ -42,6 +43,7 @@ export default function PreviewPage() {
 
   const filteredRms = useMemo(() => {
     return rms.filter((rm) => {
+      if (tierFilter !== 'all' && rm.tier !== tierFilter) return false;
       if (filter !== 'all') {
         const sc = rm.calc.overallScenario;
         if (filter === 'positive' && sc !== 'positive') return false;
@@ -56,7 +58,7 @@ export default function PreviewPage() {
       }
       return true;
     });
-  }, [rms, filter, searchQuery]);
+  }, [rms, filter, tierFilter, searchQuery]);
 
   if (rms.length === 0) return <Navigate to="/t0" replace />;
 
@@ -102,6 +104,13 @@ export default function PreviewPage() {
                value={searchQuery}
                onChange={(e) => setSearchQuery(e.target.value)}
              />
+             <div className="rep-filters" style={{ marginBottom: 4 }}>
+               {(['all', 'T0', 'T1'] as const).map((t) => (
+                 <button key={t} className={'rep-filter' + (tierFilter === t ? ' active' : '')} onClick={() => setTierFilter(t)}>
+                   {t === 'all' ? 'All Tiers' : t}
+                 </button>
+               ))}
+             </div>
              <div className="rep-filters">
                {(Object.keys(FILTER_LABELS) as Filter[]).map((f) => (
                  <button key={f} className={'rep-filter' + (filter === f ? ' active' : '')} onClick={() => setFilter(f)}>
