@@ -2,6 +2,22 @@ using IncentiveTool.Api.Excel;
 using QuestPDF.Drawing;
 using QuestPDF.Infrastructure;
 
+// Load .env file if present (for local development)
+var envFile = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".env");
+if (File.Exists(envFile))
+{
+    foreach (var line in File.ReadAllLines(envFile))
+    {
+        var trimmed = line.Trim();
+        if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith('#')) continue;
+        var idx = trimmed.IndexOf('=');
+        if (idx <= 0) continue;
+        var key = trimmed[..idx].Trim();
+        var val = trimmed[(idx + 1)..].Trim();
+        Environment.SetEnvironmentVariable(key, val);
+    }
+}
+
 // QuestPDF Community license (free for open-source projects). Review the terms at
 // https://www.questpdf.com/license/ before any commercial use.
 QuestPDF.Settings.License = LicenseType.Community;
