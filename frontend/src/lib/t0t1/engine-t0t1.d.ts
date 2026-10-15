@@ -49,6 +49,7 @@ export interface Rm {
   email: string;
   t2Email: string;
   t3Email: string;
+  doj: string;
   deals: Deal[];
   calc: Calc;
 }

@@ -242,6 +242,7 @@ function validateAndNormalize(rmRows, dlRows) {
     const emailId = pick(r, 'EmailIDOfficial','Email ID Official','Email','EmailId','Official Email');
     const t2EmailRaw = pick(r, 'T2Email','T2 Email');
     const t3EmailRaw = pick(r, 'T3Email','T3 Email');
+    const dojRaw = pick(r, 'DOJ','Date of Joining','DateOfJoining');
     const costFy2627 = pick(r, 'Cost_FY2627','Cost FY2627','CostFY2627','YTD Cost');
 
     const salaries = SALARY_MONTHS.map(m => {
@@ -321,6 +322,7 @@ function validateAndNormalize(rmRows, dlRows) {
       email: emailId ? String(emailId).trim() : '',
       t2Email: t2EmailRaw ? String(t2EmailRaw).trim() : '',
       t3Email: t3EmailRaw ? String(t3EmailRaw).trim() : '',
+      doj: dojRaw ? fmtDate(dojRaw) : '',
       deals: [],
     };
     rmMap[rm.empCode] = rm;

@@ -55,11 +55,23 @@ export default function SendPageT2T3() {
   const [sendingOne, setSendingOne] = useState<string | null>(null);
   const abortRef = useRef(false);
 
-  const [filter, setFilter] = useState<'all' | 'pending' | 'sent' | 'failed'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'sent' | 'failed' | 'new_no_deals'>('all');
   const [search, setSearch] = useState('');
 
+  function isNewNoDeal(rm: Rm): boolean {
+    if (!rm.doj || !rm.ddDate || rm.deals.length > 0) return false;
+    const doj = new Date(rm.doj);
+    const dd = new Date(rm.ddDate);
+    if (isNaN(doj.getTime()) || isNaN(dd.getTime())) return false;
+    const ddM = dd.getFullYear() * 12 + dd.getMonth();
+    const dojM = doj.getFullYear() * 12 + doj.getMonth();
+    return dojM === ddM || dojM === ddM - 1;
+  }
+
+  const newNoDealRms = useMemo(() => rms.filter((rm) => rm.email && isNewNoDeal(rm)), [rms]);
+
   const sendableRms = useMemo(
-    () => rms.filter((rm) => rm.email),
+    () => rms.filter((rm) => rm.email && !isNewNoDeal(rm)),
     [rms]
   );
 
@@ -68,10 +80,11 @@ export default function SendPageT2T3() {
   const failedRms = useMemo(() => sendableRms.filter((rm) => failedMap.has(rm.empCode)), [sendableRms, failedMap]);
 
   const displayRms = useMemo(() => {
-    let list = sendableRms;
+    let list: Rm[] = sendableRms;
     if (filter === 'pending') list = pendingRms;
     else if (filter === 'sent') list = sentRms;
     else if (filter === 'failed') list = failedRms;
+    else if (filter === 'new_no_deals') list = newNoDealRms;
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -83,7 +96,7 @@ export default function SendPageT2T3() {
       );
     }
     return list;
-  }, [sendableRms, pendingRms, sentRms, failedRms, filter, search]);
+  }, [sendableRms, pendingRms, sentRms, failedRms, newNoDealRms, filter, search]);
 
   useEffect(() => {
     if (ddShort) persistSentSet(ddShort, sentSet);
@@ -307,7 +320,7 @@ export default function SendPageT2T3() {
 
           <div className="send-section">
             <div className="send-filters">
-              {(['all', 'pending', 'sent', 'failed'] as const).map((f) => (
+              {(['all', 'pending', 'sent', 'failed', 'new_no_deals'] as const).map((f) => (
                 <button
                   key={f}
                   className={'btn ' + (filter === f ? 'primary' : 'ghost') + ' sm'}
@@ -317,6 +330,7 @@ export default function SendPageT2T3() {
                   {f === 'pending' && `Pending (${pendingRms.length})`}
                   {f === 'sent' && `Sent (${sentRms.length})`}
                   {f === 'failed' && `Failed (${failedRms.length})`}
+                  {f === 'new_no_deals' && `M & M-1 No Deals (${newNoDealRms.length})`}
                 </button>
               ))}
               <input

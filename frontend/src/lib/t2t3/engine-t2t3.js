@@ -254,6 +254,7 @@ function validateAndNormalize(rmRows, dlRows) {
     const t2EmailRaw = pick(r, 'T2Email','T2 Email');
     const t3EmailRaw = pick(r, 'T3Email','T3 Email');
     const pnlEmailRaw = pick(r, 'PnLEmail','PnL Email','PNLEmail');
+    const dojRaw = pick(r, 'DOJ','Date of Joining','DateOfJoining');
     const teamCostRaw = pick(r, 'Self+Team YTD Cost','Team YTD Cost','SelfTeamYTDCost','Self+Team Cost','Team Cost','Self & Team YTD Cost','YTD Team + Self','YTD Team+Self');
 
     if (!empCode) { issues.push({level:'err',loc:'RMs row '+rowNum,msg:'Missing Employee Code (primary key).'}); return; }
@@ -312,6 +313,7 @@ function validateAndNormalize(rmRows, dlRows) {
       t2Email: t2EmailRaw ? String(t2EmailRaw).trim() : '',
       t3Email: t3EmailRaw ? String(t3EmailRaw).trim() : '',
       pnlEmail: pnlEmailRaw ? String(pnlEmailRaw).trim() : '',
+      doj: dojRaw ? fmtDate(dojRaw) : '',
       deals: [],
     };
     rmMap[rm.empCode] = rm;
