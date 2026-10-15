@@ -24,7 +24,9 @@ public class EmailController : ControllerBase
         string[] CcEmails,
         string? SmtpUser = null,
         string? SmtpPass = null,
-        string? Tier = null
+        string? Tier = null,
+        string? FromEmail = null,
+        string? FromName = null
     );
 
     private static (string host, int port, string user, string pass, string fromEmail, string fromName, bool ok) GetSendGridConfig()
@@ -110,12 +112,15 @@ public class EmailController : ControllerBase
             return BadRequest(new { error = "Invalid RM payload: " + ex.Message });
         }
 
+        var fromEmail = !string.IsNullOrWhiteSpace(req.FromEmail) ? req.FromEmail : sg.fromEmail;
+        var fromName = !string.IsNullOrWhiteSpace(req.FromName) ? req.FromName : sg.fromName;
+
         // Try SendGrid first
         if (sg.ok)
         {
             try
             {
-                var message = BuildMessage(sg.fromEmail, sg.fromName, req.RecipientEmail, req.RecipientName,
+                var message = BuildMessage(fromEmail, fromName, req.RecipientEmail, req.RecipientName,
                     req.Subject, req.Body, fileName, pdfBytes, req.CcEmails);
                 await SendViaSendGrid(message, sg.host, sg.port, sg.user, sg.pass, ct);
 
@@ -134,7 +139,7 @@ public class EmailController : ControllerBase
         {
             try
             {
-                var message = BuildMessage(req.SmtpUser!, "Incentive Team", req.RecipientEmail, req.RecipientName,
+                var message = BuildMessage(fromEmail, fromName, req.RecipientEmail, req.RecipientName,
                     req.Subject, req.Body, fileName, pdfBytes, req.CcEmails);
                 await SendViaSmtp(message, req.SmtpUser!, req.SmtpPass!, ct);
 
@@ -182,7 +187,9 @@ public class EmailController : ControllerBase
         string Body,
         string? Tier = null,
         string? SmtpUser = null,
-        string? SmtpPass = null
+        string? SmtpPass = null,
+        string? FromEmail = null,
+        string? FromName = null
     );
 
     [HttpPost("test-send")]
@@ -211,11 +218,14 @@ public class EmailController : ControllerBase
             return BadRequest(new { error = "Invalid RM payload: " + ex.Message });
         }
 
+        var fromEmail = !string.IsNullOrWhiteSpace(req.FromEmail) ? req.FromEmail : sg.fromEmail;
+        var fromName = !string.IsNullOrWhiteSpace(req.FromName) ? req.FromName : sg.fromName;
+
         if (sg.ok)
         {
             try
             {
-                var message = BuildMessage(sg.fromEmail, sg.fromName, req.TestEmail, "Test Recipient",
+                var message = BuildMessage(fromEmail, fromName, req.TestEmail, "Test Recipient",
                     "[TEST] " + req.Subject, "[TEST EMAIL]\n\n" + req.Body, fileName, pdfBytes);
                 await SendViaSendGrid(message, sg.host, sg.port, sg.user, sg.pass, ct);
 
@@ -232,7 +242,7 @@ public class EmailController : ControllerBase
         {
             try
             {
-                var message = BuildMessage(req.SmtpUser!, "Incentive Team", req.TestEmail, "Test Recipient",
+                var message = BuildMessage(fromEmail, fromName, req.TestEmail, "Test Recipient",
                     "[TEST] " + req.Subject, "[TEST EMAIL]\n\n" + req.Body, fileName, pdfBytes);
                 await SendViaSmtp(message, req.SmtpUser!, req.SmtpPass!, ct);
 

@@ -26,7 +26,9 @@ export async function sendEmail(
   rm: Rm,
   ccEmails: string[],
   smtpUser?: string,
-  smtpPass?: string
+  smtpPass?: string,
+  fromEmail?: string,
+  fromName?: string
 ): Promise<SendResult> {
   try {
     const payload: Record<string, unknown> = {
@@ -42,6 +44,8 @@ export async function sendEmail(
       payload.SmtpUser = smtpUser;
       payload.SmtpPass = smtpPass;
     }
+    if (fromEmail) payload.FromEmail = fromEmail;
+    if (fromName) payload.FromName = fromName;
     const res = await fetch(`${API_BASE_URL}/api/email/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -62,7 +66,9 @@ export async function sendTestEmail(
   rm: Rm,
   testEmail: string,
   smtpUser?: string,
-  smtpPass?: string
+  smtpPass?: string,
+  fromEmail?: string,
+  fromName?: string
 ): Promise<{ success: boolean; error?: string; via?: string }> {
   try {
     const payload: Record<string, unknown> = {
@@ -76,6 +82,8 @@ export async function sendTestEmail(
       payload.SmtpUser = smtpUser;
       payload.SmtpPass = smtpPass;
     }
+    if (fromEmail) payload.FromEmail = fromEmail;
+    if (fromName) payload.FromName = fromName;
     const res = await fetch(`${API_BASE_URL}/api/email/test-send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

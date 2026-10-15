@@ -40,6 +40,9 @@ export default function SendPageT2T3() {
 
   const ddShort = rms[0]?.calc?.ddShort || '';
 
+  const [fromEmail, setFromEmail] = useState('incentive@Squareyards.com');
+  const [fromName, setFromName] = useState('Incentive Team');
+
   const [smtpUser, setSmtpUser] = useState('incentive@squareyards.com');
   const [smtpPass, setSmtpPass] = useState('');
   const [smtpOk, setSmtpOk] = useState<boolean | null>(null);
@@ -122,7 +125,7 @@ export default function SendPageT2T3() {
   async function handleSendOne(rm: Rm) {
     setSendingOne(rm.empCode);
     const cc = getCc(rm);
-    const result = await sendEmail(rm, cc, smtpPass ? smtpUser : undefined, smtpPass || undefined);
+    const result = await sendEmail(rm, cc, smtpPass ? smtpUser : undefined, smtpPass || undefined, fromEmail, fromName);
     if (result.success) {
       setSentSet((prev) => { const next = new Set(prev); next.add(rm.empCode); return next; });
       toast(`Sent to ${rm.name}`, 'success');
@@ -151,7 +154,7 @@ export default function SendPageT2T3() {
       setSendingCurrent({ name: rm.name, empCode: rm.empCode });
 
       const cc = getCc(rm);
-      const result = await sendEmail(rm, cc, smtpPass ? smtpUser : undefined, smtpPass || undefined);
+      const result = await sendEmail(rm, cc, smtpPass ? smtpUser : undefined, smtpPass || undefined, fromEmail, fromName);
 
       if (result.success) {
         setSentSet((prev) => {
@@ -197,7 +200,7 @@ export default function SendPageT2T3() {
     setTestSending(true);
     setTestResult(null);
     const rm = sendableRms[0];
-    const res = await sendTestEmail(rm, testEmail, smtpPass ? smtpUser : undefined, smtpPass || undefined);
+    const res = await sendTestEmail(rm, testEmail, smtpPass ? smtpUser : undefined, smtpPass || undefined, fromEmail, fromName);
     setTestResult(res);
     toast(res.success ? `Test email sent via ${res.via}` : `Test failed: ${res.error}`, res.success ? 'success' : 'err');
     setTestSending(false);
@@ -217,8 +220,23 @@ export default function SendPageT2T3() {
             Email each employee their PDF incentive statement. Primary sender: <strong>SendGrid</strong>.
           </p>
 
+          {/* Sender Identity */}
           <div className="send-section">
-            <h3>1. Backup SMTP (optional)</h3>
+            <h3>1. Sender</h3>
+            <div className="smtp-row">
+              <label>
+                From Email
+                <input type="email" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} className="input" />
+              </label>
+              <label>
+                From Name
+                <input type="text" value={fromName} onChange={(e) => setFromName(e.target.value)} className="input" />
+              </label>
+            </div>
+          </div>
+
+          <div className="send-section">
+            <h3>2. Backup SMTP (optional)</h3>
             <p className="hint" style={{ marginBottom: 8 }}>SendGrid is the primary sender. SMTP is used as a fallback only if SendGrid fails.</p>
             <div className="smtp-row">
               <label>
@@ -244,7 +262,7 @@ export default function SendPageT2T3() {
           </div>
 
           <div className="send-section">
-            <h3>2. Send list</h3>
+            <h3>3. Send list</h3>
             <div className="diag">
               <div className="diag-row">
                 <span className="k">Total employees in input file</span>
@@ -285,7 +303,7 @@ export default function SendPageT2T3() {
 
           {/* Test Email */}
           <div className="send-section">
-            <h3>3. Test Email</h3>
+            <h3>4. Test Email</h3>
             <p className="hint" style={{ marginBottom: 8 }}>Send a test email with the first employee's PDF to verify delivery.</p>
             <div className="smtp-row">
               <label>
