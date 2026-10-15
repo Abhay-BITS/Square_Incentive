@@ -240,6 +240,8 @@ function validateAndNormalize(rmRows, dlRows) {
     // New v10 fields
     const priorPayable = pick(r, 'Prior Period Final Payable','Prior Period Payable','Back Payable FY24');
     const emailId = pick(r, 'EmailIDOfficial','Email ID Official','Email','EmailId','Official Email');
+    const t2EmailRaw = pick(r, 'T2Email','T2 Email');
+    const t3EmailRaw = pick(r, 'T3Email','T3 Email');
     const costFy2627 = pick(r, 'Cost_FY2627','Cost FY2627','CostFY2627','YTD Cost');
 
     const salaries = SALARY_MONTHS.map(m => {
@@ -317,6 +319,8 @@ function validateAndNormalize(rmRows, dlRows) {
       ddDate: fmtDate(ddDate),
       backYearPayables,
       email: emailId ? String(emailId).trim() : '',
+      t2Email: t2EmailRaw ? String(t2EmailRaw).trim() : '',
+      t3Email: t3EmailRaw ? String(t3EmailRaw).trim() : '',
       deals: [],
     };
     rmMap[rm.empCode] = rm;

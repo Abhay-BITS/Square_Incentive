@@ -47,6 +47,8 @@ export interface Rm {
   backYearPayables: { total: number };
   ytdCostDirect: number | null;
   email: string;
+  t2Email: string;
+  t3Email: string;
   deals: Deal[];
   calc: Calc;
 }
