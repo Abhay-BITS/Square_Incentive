@@ -64,13 +64,15 @@ function parseCsvLine(line: string): string[] {
 }
 
 export function buildEmailSubject(rm: Rm): string {
-  return `September Dollar Day - Incentive Statement - ${rm.empCode}`;
+  const ddMonth = rm.calc?.ddLabel?.replace(/\s*\d{4}$/, '') || 'Dollar';
+  return `${ddMonth} Dollar Day - Incentive Statement - ${rm.empCode}`;
 }
 
 export function buildEmailBody(rm: Rm): string {
+  const ddMonth = rm.calc?.ddLabel?.replace(/\s*\d{4}$/, '') || 'Dollar';
   return (
     `Hi ${rm.name},\n\n` +
-    `Please find attached the detailed Incentive Statement for the September Dollar Day.\n\n` +
+    `Please find attached the detailed Incentive Statement for the ${ddMonth} Dollar Day.\n\n` +
     `Regards,\nIncentive Team\nSquare Yards`
   );
 }
