@@ -44,6 +44,9 @@ export interface Rm {
   backYearPayables: { total: number };
   teamYtdCost: number;
   email: string;
+  t2Email: string;
+  t3Email: string;
+  pnlEmail: string;
   deals: Deal[];
   calc: Calc;
 }

@@ -251,6 +251,9 @@ function validateAndNormalize(rmRows, dlRows) {
     const ddDate = pick(r, 'Dollar Day Date','DD Date','Dollar Day');
     const priorPayable = pick(r, 'Prior Period Final Payable','Prior Period Payable','Back Payable FY24');
     const emailId = pick(r, 'EmailIDOfficial','Email ID Official','Email','EmailId','Official Email');
+    const t2EmailRaw = pick(r, 'T2Email','T2 Email');
+    const t3EmailRaw = pick(r, 'T3Email','T3 Email');
+    const pnlEmailRaw = pick(r, 'PnLEmail','PnL Email','PNLEmail');
     const teamCostRaw = pick(r, 'Self+Team YTD Cost','Team YTD Cost','SelfTeamYTDCost','Self+Team Cost','Team Cost','Self & Team YTD Cost','YTD Team + Self','YTD Team+Self');
 
     if (!empCode) { issues.push({level:'err',loc:'RMs row '+rowNum,msg:'Missing Employee Code (primary key).'}); return; }
@@ -306,6 +309,9 @@ function validateAndNormalize(rmRows, dlRows) {
       ddDate: fmtDate(ddDate),
       backYearPayables,
       email: emailId ? String(emailId).trim() : '',
+      t2Email: t2EmailRaw ? String(t2EmailRaw).trim() : '',
+      t3Email: t3EmailRaw ? String(t3EmailRaw).trim() : '',
+      pnlEmail: pnlEmailRaw ? String(pnlEmailRaw).trim() : '',
       deals: [],
     };
     rmMap[rm.empCode] = rm;

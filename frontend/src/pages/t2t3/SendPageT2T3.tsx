@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { fmtINR } from '../../lib/t2t3/engine-t2t3.js';
 import type { Rm } from '../../lib/t2t3/engine-t2t3.js';
 import {
   buildEmailBody,
   buildEmailSubject,
-  parseCcCsv,
   sendEmail,
   testSmtp,
 } from '../../lib/t2t3/emailApi-t2t3.js';
@@ -41,8 +40,6 @@ export default function SendPageT2T3() {
 
   const ddShort = rms[0]?.calc?.ddShort || '';
 
-  const [ccMap, setCcMap] = useState<Map<string, string[]>>(new Map());
-  const [ccLoaded, setCcLoaded] = useState(false);
   const [smtpUser, setSmtpUser] = useState('incentive@squareyards.com');
   const [smtpPass, setSmtpPass] = useState('');
   const [smtpOk, setSmtpOk] = useState<boolean | null>(null);
@@ -92,21 +89,13 @@ export default function SendPageT2T3() {
     if (ddShort) persistSentSet(ddShort, sentSet);
   }, [sentSet, ddShort]);
 
-  const handleCcUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const entries = parseCcCsv(reader.result as string);
-      const map = new Map<string, string[]>();
-      entries.forEach((en) => map.set(en.empCode, en.ccEmails));
-      setCcMap(map);
-      setCcLoaded(true);
-      toast(`Loaded CC emails for ${entries.length} employees`, 'success');
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  }, [toast]);
+  function getCc(rm: Rm): string[] {
+    const cc: string[] = [];
+    if (rm.t2Email && rm.t2Email.includes('@')) cc.push(rm.t2Email);
+    if (rm.t3Email && rm.t3Email.includes('@')) cc.push(rm.t3Email);
+    if (rm.pnlEmail && rm.pnlEmail.includes('@')) cc.push(rm.pnlEmail);
+    return cc;
+  }
 
   async function handleTestSmtp() {
     if (!smtpPass) { toast('Enter the SMTP password first', 'err'); return; }
@@ -120,7 +109,7 @@ export default function SendPageT2T3() {
   async function handleSendOne(rm: Rm) {
     if (!smtpPass) { toast('Enter the SMTP password first', 'err'); return; }
     setSendingOne(rm.empCode);
-    const cc = ccMap.get(rm.empCode) || [];
+    const cc = getCc(rm);
     const result = await sendEmail(rm, cc, smtpUser, smtpPass);
     if (result.success) {
       setSentSet((prev) => { const next = new Set(prev); next.add(rm.empCode); return next; });
@@ -156,7 +145,7 @@ export default function SendPageT2T3() {
       setSendCount(count);
       setSendingCurrent({ name: rm.name, empCode: rm.empCode });
 
-      const cc = ccMap.get(rm.empCode) || [];
+      const cc = getCc(rm);
       const result = await sendEmail(rm, cc, smtpUser, smtpPass);
 
       if (result.success) {
@@ -234,19 +223,7 @@ export default function SendPageT2T3() {
           </div>
 
           <div className="send-section">
-            <h3>2. CC list (optional)</h3>
-            <p className="hint">Upload the Incentive CC emails CSV to auto-add CC recipients per employee.</p>
-            <div className="cc-row">
-              <label className="btn secondary upload-label">
-                {ccLoaded ? `CC loaded (${ccMap.size} employees)` : 'Upload CC CSV'}
-                <input type="file" accept=".csv" onChange={handleCcUpload} hidden />
-              </label>
-              {ccLoaded && <span className="smtp-badge ok">{ccMap.size} employees with CC</span>}
-            </div>
-          </div>
-
-          <div className="send-section">
-            <h3>3. Send list</h3>
+            <h3>2. Send list</h3>
             <div className="diag">
               <div className="diag-row">
                 <span className="k">Total employees (with email)</span>
@@ -368,7 +345,7 @@ export default function SendPageT2T3() {
                   {displayRms.slice(0, 200).map((rm) => {
                     const isSent = sentSet.has(rm.empCode);
                     const err = failedMap.get(rm.empCode);
-                    const cc = ccMap.get(rm.empCode) || [];
+                    const cc = getCc(rm);
                     const cashDue = rm.calc.dueForRelease;
                     const total = cashDue + cashDue * 0.25;
                     const isSendingThis = sendingOne === rm.empCode;
@@ -422,7 +399,7 @@ export default function SendPageT2T3() {
                 </div>
                 <div className="preview-field">
                   <span className="preview-label">CC:</span>
-                  <span>{(ccMap.get(previewRm.empCode) || []).join(', ') || '(none)'}</span>
+                  <span>{getCc(previewRm).join(', ') || '(none)'}</span>
                 </div>
                 <div className="preview-field">
                   <span className="preview-label">Subject:</span>
