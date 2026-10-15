@@ -6,6 +6,7 @@ import {
   buildEmailBody,
   buildEmailSubject,
   sendEmail,
+  sendTestEmail,
   testSmtp,
 } from '../../lib/t2t3/emailApi-t2t3.js';
 import { useAppT2T3 } from '../../context/AppContextT2T3.js';
@@ -119,10 +120,9 @@ export default function SendPageT2T3() {
   }
 
   async function handleSendOne(rm: Rm) {
-    if (!smtpPass) { toast('Enter the SMTP password first', 'err'); return; }
     setSendingOne(rm.empCode);
     const cc = getCc(rm);
-    const result = await sendEmail(rm, cc, smtpUser, smtpPass);
+    const result = await sendEmail(rm, cc, smtpPass ? smtpUser : undefined, smtpPass || undefined);
     if (result.success) {
       setSentSet((prev) => { const next = new Set(prev); next.add(rm.empCode); return next; });
       toast(`Sent to ${rm.name}`, 'success');
@@ -134,8 +134,6 @@ export default function SendPageT2T3() {
   }
 
   async function handleSend() {
-    if (!smtpPass) { toast('Enter the SMTP password first', 'err'); return; }
-
     abortRef.current = false;
     setStatus('sending');
     setFailedMap(new Map());
@@ -153,7 +151,7 @@ export default function SendPageT2T3() {
       setSendingCurrent({ name: rm.name, empCode: rm.empCode });
 
       const cc = getCc(rm);
-      const result = await sendEmail(rm, cc, smtpUser, smtpPass);
+      const result = await sendEmail(rm, cc, smtpPass ? smtpUser : undefined, smtpPass || undefined);
 
       if (result.success) {
         setSentSet((prev) => {
@@ -189,6 +187,22 @@ export default function SendPageT2T3() {
 
   const [previewRm, setPreviewRm] = useState<Rm | null>(null);
 
+  const [testEmail, setTestEmail] = useState('');
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; via?: string; error?: string } | null>(null);
+
+  async function handleTestEmail() {
+    if (!testEmail || !testEmail.includes('@')) { toast('Enter a valid email address', 'err'); return; }
+    if (sendableRms.length === 0) { toast('No employees to preview', 'err'); return; }
+    setTestSending(true);
+    setTestResult(null);
+    const rm = sendableRms[0];
+    const res = await sendTestEmail(rm, testEmail, smtpPass ? smtpUser : undefined, smtpPass || undefined);
+    setTestResult(res);
+    toast(res.success ? `Test email sent via ${res.via}` : `Test failed: ${res.error}`, res.success ? 'success' : 'err');
+    setTestSending(false);
+  }
+
   if (rms.length === 0) return <Navigate to="/t2" replace />;
 
   const noEmail = rms.filter((rm) => !rm.email);
@@ -200,11 +214,12 @@ export default function SendPageT2T3() {
           <BackLink to="/t2/export">Back to export</BackLink>
           <h1>Send incentive emails</h1>
           <p className="lede">
-            Email each employee their PDF incentive statement via <strong>{smtpUser}</strong>.
+            Email each employee their PDF incentive statement. Primary sender: <strong>SendGrid</strong>.
           </p>
 
           <div className="send-section">
-            <h3>1. SMTP Credentials</h3>
+            <h3>1. Backup SMTP (optional)</h3>
+            <p className="hint" style={{ marginBottom: 8 }}>SendGrid is the primary sender. SMTP is used as a fallback only if SendGrid fails.</p>
             <div className="smtp-row">
               <label>
                 Email
@@ -268,13 +283,40 @@ export default function SendPageT2T3() {
             </div>
           </div>
 
+          {/* Test Email */}
+          <div className="send-section">
+            <h3>3. Test Email</h3>
+            <p className="hint" style={{ marginBottom: 8 }}>Send a test email with the first employee's PDF to verify delivery.</p>
+            <div className="smtp-row">
+              <label>
+                Send test to
+                <input
+                  type="email"
+                  value={testEmail}
+                  onChange={(e) => { setTestEmail(e.target.value); setTestResult(null); }}
+                  placeholder="your.email@example.com"
+                  className="input"
+                />
+              </label>
+              <button
+                className="btn secondary"
+                onClick={handleTestEmail}
+                disabled={testSending || !testEmail || sendableRms.length === 0}
+              >
+                {testSending ? <><span className="spinner"></span> Sending…</> : 'Send test'}
+              </button>
+              {testResult?.success && <span className="smtp-badge ok">Sent via {testResult.via}</span>}
+              {testResult && !testResult.success && <span className="smtp-badge fail">Failed</span>}
+            </div>
+          </div>
+
           <div className="send-controls">
             {status === 'idle' || status === 'paused' || status === 'done' ? (
               <>
                 <button
                   className="btn primary"
                   onClick={handleSend}
-                  disabled={!smtpPass || pendingRms.length === 0}
+                  disabled={pendingRms.length === 0}
                 >
                   {status === 'done'
                     ? 'Send again (retry remaining)'
@@ -379,7 +421,7 @@ export default function SendPageT2T3() {
                           <button
                             className="btn primary sm"
                             onClick={() => handleSendOne(rm)}
-                            disabled={isSent || isSendingThis || status === 'sending' || !smtpPass}
+                            disabled={isSent || isSendingThis || status === 'sending'}
                           >
                             {isSendingThis ? <><span className="spinner"></span></> : isSent ? 'Sent' : 'Send'}
                           </button>

@@ -86,23 +86,26 @@ export interface SendResult {
 export async function sendEmail(
   rm: Rm,
   ccEmails: string[],
-  smtpUser: string,
-  smtpPass: string
+  smtpUser?: string,
+  smtpPass?: string
 ): Promise<SendResult> {
   try {
+    const payload: Record<string, unknown> = {
+      Rm: rm,
+      RecipientEmail: rm.email,
+      RecipientName: rm.name,
+      Subject: buildEmailSubject(rm),
+      Body: buildEmailBody(rm),
+      CcEmails: ccEmails,
+    };
+    if (smtpUser && smtpPass) {
+      payload.SmtpUser = smtpUser;
+      payload.SmtpPass = smtpPass;
+    }
     const res = await fetch(`${API_BASE_URL}/api/email/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        Rm: rm,
-        RecipientEmail: rm.email,
-        RecipientName: rm.name,
-        Subject: buildEmailSubject(rm),
-        Body: buildEmailBody(rm),
-        CcEmails: ccEmails,
-        SmtpUser: smtpUser,
-        SmtpPass: smtpPass,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
@@ -112,6 +115,35 @@ export async function sendEmail(
     return { empCode: rm.empCode, success: true };
   } catch (e) {
     return { empCode: rm.empCode, success: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function sendTestEmail(
+  rm: Rm,
+  testEmail: string,
+  smtpUser?: string,
+  smtpPass?: string
+): Promise<{ success: boolean; error?: string; via?: string }> {
+  try {
+    const payload: Record<string, unknown> = {
+      Rm: rm,
+      TestEmail: testEmail,
+      Subject: buildEmailSubject(rm),
+      Body: buildEmailBody(rm),
+    };
+    if (smtpUser && smtpPass) {
+      payload.SmtpUser = smtpUser;
+      payload.SmtpPass = smtpPass;
+    }
+    const res = await fetch(`${API_BASE_URL}/api/email/test-send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json()) as { success?: boolean; error?: string; via?: string };
+    return { success: !!data.success, error: data.error, via: data.via };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
