@@ -12,7 +12,6 @@ import { useAppT2T3 } from '../../context/AppContextT2T3.js';
 import { LayoutT2T3 } from '../../components/LayoutT2T3.js';
 import { BackLink } from '../../components/BackLink.js';
 
-const DAILY_LIMIT = 10000;
 const SEND_DELAY_MS = 1500;
 
 type SendStatus = 'idle' | 'sending' | 'paused' | 'done';
@@ -147,11 +146,6 @@ export default function SendPageT2T3() {
 
     for (let i = 0; i < toSend.length; i++) {
       if (abortRef.current) { setStatus('paused'); return; }
-      if (sentSet.size + count >= DAILY_LIMIT) {
-        toast(`Reached ${DAILY_LIMIT} daily limit. Resume tomorrow.`, 'err');
-        setStatus('paused');
-        return;
-      }
 
       const rm = toSend[i];
       setCurrentIdx(i);
@@ -207,7 +201,6 @@ export default function SendPageT2T3() {
           <h1>Send incentive emails</h1>
           <p className="lede">
             Email each employee their PDF incentive statement via <strong>{smtpUser}</strong>.
-            Google Workspace limit: {DAILY_LIMIT}/day.
           </p>
 
           <div className="send-section">
@@ -239,9 +232,25 @@ export default function SendPageT2T3() {
             <h3>2. Send list</h3>
             <div className="diag">
               <div className="diag-row">
-                <span className="k">Total employees (with email)</span>
+                <span className="k">Total employees in input file</span>
+                <span className="v">{rms.length}</span>
+              </div>
+              <div className="diag-row">
+                <span className="k">Total eligible for email</span>
                 <span className="v">{sendableRms.length}</span>
               </div>
+              {newNoDealRms.length > 0 && (
+                <div className="diag-row">
+                  <span className="k">M & M-1 employees (No Deal)</span>
+                  <span className="v">{newNoDealRms.length}</span>
+                </div>
+              )}
+              {noEmail.length > 0 && (
+                <div className="diag-row">
+                  <span className="k">Missing email (skipped)</span>
+                  <span className="v">{noEmail.length}</span>
+                </div>
+              )}
               <div className="diag-row">
                 <span className="k">Already sent (this cycle)</span>
                 <span className="v sent-count">{sentSet.size}</span>
@@ -256,16 +265,6 @@ export default function SendPageT2T3() {
                   <span className="v failed-count">{failedMap.size}</span>
                 </div>
               )}
-              {noEmail.length > 0 && (
-                <div className="diag-row">
-                  <span className="k">Missing email (skipped)</span>
-                  <span className="v">{noEmail.length}</span>
-                </div>
-              )}
-              <div className="diag-row">
-                <span className="k">Daily limit remaining</span>
-                <span className="v">{Math.max(0, DAILY_LIMIT - sentSet.size)}</span>
-              </div>
             </div>
           </div>
 

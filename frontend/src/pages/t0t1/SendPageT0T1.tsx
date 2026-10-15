@@ -12,7 +12,6 @@ import { useApp } from '../../context/AppContextT0T1.js';
 import { Layout } from '../../components/LayoutT0T1.js';
 import { BackLink } from '../../components/BackLink.js';
 
-const DAILY_LIMIT = 10000;
 const SEND_DELAY_MS = 1500;
 
 type SendStatus = 'idle' | 'sending' | 'paused' | 'done';
@@ -146,11 +145,6 @@ export default function SendPage() {
 
     for (let i = 0; i < toSend.length; i++) {
       if (abortRef.current) { setStatus('paused'); return; }
-      if (sentSet.size + count >= DAILY_LIMIT) {
-        toast(`Reached ${DAILY_LIMIT} daily limit. Resume tomorrow.`, 'err');
-        setStatus('paused');
-        return;
-      }
 
       const rm = toSend[i];
       setCurrentIdx(i);
@@ -206,7 +200,6 @@ export default function SendPage() {
           <h1>Send incentive emails</h1>
           <p className="lede">
             Email each RM their PDF incentive statement via <strong>{smtpUser}</strong>.
-            Google Workspace limit: {DAILY_LIMIT}/day.
           </p>
 
           {/* SMTP Credentials */}
@@ -240,9 +233,25 @@ export default function SendPage() {
             <h3>2. Send list</h3>
             <div className="diag">
               <div className="diag-row">
-                <span className="k">Total RMs (with email)</span>
+                <span className="k">Total employees in input file</span>
+                <span className="v">{rms.length}</span>
+              </div>
+              <div className="diag-row">
+                <span className="k">Total eligible for email</span>
                 <span className="v">{sendableRms.length}</span>
               </div>
+              {newNoDealRms.length > 0 && (
+                <div className="diag-row">
+                  <span className="k">M & M-1 employees (No Deal)</span>
+                  <span className="v">{newNoDealRms.length}</span>
+                </div>
+              )}
+              {noEmail.length > 0 && (
+                <div className="diag-row">
+                  <span className="k">Missing email (skipped)</span>
+                  <span className="v">{noEmail.length}</span>
+                </div>
+              )}
               <div className="diag-row">
                 <span className="k">Already sent (this cycle)</span>
                 <span className="v sent-count">{sentSet.size}</span>
@@ -257,16 +266,6 @@ export default function SendPage() {
                   <span className="v failed-count">{failedMap.size}</span>
                 </div>
               )}
-              {noEmail.length > 0 && (
-                <div className="diag-row">
-                  <span className="k">Missing email (skipped)</span>
-                  <span className="v">{noEmail.length}</span>
-                </div>
-              )}
-              <div className="diag-row">
-                <span className="k">Daily limit remaining</span>
-                <span className="v">{Math.max(0, DAILY_LIMIT - sentSet.size)}</span>
-              </div>
             </div>
           </div>
 
