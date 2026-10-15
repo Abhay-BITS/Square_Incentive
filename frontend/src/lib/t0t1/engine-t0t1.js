@@ -116,19 +116,18 @@ function ddMonthShort(dateStr) {
   return d.toLocaleString('en-US', { month: 'long' }) + d.getFullYear();
 }
 // Derive financial year labels from the Dollar Day date.
-// DD in Oct 2026 → FY starts Apr 2026 → fyStartYear=2026, fyLabel="FY27", fyFull="FY-202627", fyAprilLabel="April 2026"
+// DD in Oct 2026 → FY starts Apr 2026 → fyStartYear=2026, fyLabel="FY2026-2027", fyAprilLabel="April 2026"
 function fyFromDollarDay(ddDateStr) {
   const d = toLocalDate(ddDateStr);
-  if (isNaN(d.getTime())) return { fyStartYear: 2026, fyLabel: 'FY27', fyFull: 'FY-202627', fyAprilLabel: 'April 2026' };
+  if (isNaN(d.getTime())) return { fyStartYear: 2026, fyLabel: 'FY2026-2027', fyFull: 'FY2026-2027', fyAprilLabel: 'April 2026' };
   const m = d.getMonth(); // 0-based
   const y = d.getFullYear();
   const fyStartYear = m >= 3 ? y : y - 1; // Apr-Dec → same year, Jan-Mar → previous year
   const fyEndYear = fyStartYear + 1;
-  const shortEnd = String(fyEndYear).slice(-2);
   return {
     fyStartYear,
-    fyLabel: 'FY' + shortEnd,
-    fyFull: 'FY-' + fyStartYear + fyEndYear,
+    fyLabel: 'FY' + fyStartYear + '-' + fyEndYear,
+    fyFull: 'FY' + fyStartYear + '-' + fyEndYear,
     fyAprilLabel: 'April ' + fyStartYear,
   };
 }
@@ -1026,7 +1025,6 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     provBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 12px 0 6px 0; font-weight: 700;">Provisional Incentive</p>
       ${bulletList([
-        `<strong>Deals used:</strong> none - all deals are Not counted.`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
         `<strong>Provisional Incentive = \u20B90.</strong>`
       ])}`;
@@ -1034,7 +1032,6 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     provBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 12px 0 6px 0; font-weight: 700;">Provisional Incentive</p>
       ${bulletList([
-        `<strong>Deals used:</strong> ${tcfListWithStage(provDeals)} (${provDealCount} deals - all Counted, Confirmed, Collected and Logged In stages)`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
         `<strong>Total Provisional Incentive Deal Revenue:</strong> ${sumFormula(provDeals)} = ${fmtINR(c.provBase)}`,
         `<strong style="color: ${T.RED_DEEP};">Did not cross target</strong> \u2192 Provisional Incentive = \u20B90.`
@@ -1044,7 +1041,6 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     provBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 12px 0 6px 0; font-weight: 700;">Provisional Incentive</p>
       ${bulletList([
-        `<strong>Deals used:</strong> ${tcfListWithStage(provDeals)} (${provDealCount} deals - all Counted, Confirmed, Collected and Logged In stages)`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
         `<strong>Total Provisional Incentive Deal Revenue:</strong> ${sumFormula(provDeals)} = ${fmtINR(c.provBase)}`,
         c.provBase > c.eligibilityTarget
@@ -1061,7 +1057,6 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     confBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 22px 0 6px 0; font-weight: 700;">Confirmed Incentive</p>
       ${bulletList([
-        `<strong>Deals used:</strong> none - no Confirmed or Collected deals this cycle.`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
         `<strong>Confirmed Incentive = \u20B90.</strong>`
       ])}`;
@@ -1069,7 +1064,6 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     confBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 22px 0 6px 0; font-weight: 700;">Confirmed Incentive</p>
       ${bulletList([
-        `<strong>Deals used:</strong> ${tcfListWithStage(confDeals)} (${confDealCount} deals - only Confirmed, Collected and Logged In stages)`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
         `<strong>Total Confirmed Incentive Deal Revenue:</strong> ${confSumFormula(confDeals)} = ${fmtINR(c.confBase)}`,
         `<strong style="color: ${T.RED_DEEP};">Did not cross target</strong> \u2192 Confirmed Incentive = \u20B90.`
@@ -1082,7 +1076,6 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     confBlock = `
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 22px 0 6px 0; font-weight: 700;">Confirmed Incentive</p>
       ${bulletList([
-        `<strong>Deals used:</strong> ${tcfListWithStage(confDeals)} (${confDealCount} deals - only Confirmed, Collected and Logged In stages)`,
         `<strong>Eligibility Target (SMx 5\u00D7):</strong> ${fmtINR(c.eligibilityTarget)}`,
         `<strong>Total Confirmed Incentive Deal Revenue:</strong> ${confSumFormula(confDeals)} = ${fmtINR(c.confBase)}`,
         crossStatus
@@ -1140,10 +1133,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           'Deal Incentive Share = Confirmed Incentive \u00D7 (Deal Revenue \u00F7 Total Confirmed Incentive Deal Revenue)',
           '',
           '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
-          HL('Payout will be based on whichever is higher: 50% or actual collection.'),
-          '',
-          '<span style="color: rgba(255,255,255,0.7);">Logged In deals:</span>',
-          'Revenue \u00D7 Collection% contributes to Confirmed Base. Payout = 100% of Deal Incentive Share.'
+          HL('Payout will be based on whichever is higher: 50% or actual collection.')
         ])}
       `;
     }
@@ -1335,7 +1325,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       step6Html = sectionH(nextNo(), 'CRM release check') + `<tr><td style="padding: 4px 0 12px 0;">
         <div style="padding: 12px 14px; background: ${T.GREEN_SOFT}; border-left: 3px solid ${T.GREEN}; border-radius: 3px;">
           <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 0;">
-            <strong style="color: ${T.GREEN_DEEP};">Release \u2713.</strong> You have a CRM-approved deal in the T-1 or T month (T = Dollar Day month), so the Due amount disburses this Dollar Day.
+            <strong style="color: ${T.GREEN_DEEP};">Release \u2713.</strong> You have a CRM-approved deal in the current month or previous month, so the Due amount disburses this Dollar Day.
           </p>
         </div>
       </td></tr>`;
@@ -1343,7 +1333,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       step6Html = sectionH(nextNo(), 'CRM release check') + `<tr><td style="padding: 4px 0 12px 0;">
         <div style="padding: 12px 14px; background: ${T.AMBER_SOFT}; border-left: 3px solid ${T.ORANGE}; border-radius: 3px;">
           <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 0;">
-            <strong style="color: #A16207;">Incentive Held</strong> as you don't have a CRM-approved deal in the T-1 or T month (T = Dollar Day month).<br>Your Due Incentive of <strong>${fmtINR(c.due)}</strong> will release automatically the next qualifying month.
+            <strong style="color: #A16207;">Incentive Held</strong> as you don't have a CRM-approved deal in the current month or previous month.<br>Your Due Incentive of <strong>${fmtINR(c.due)}</strong> will release automatically the next qualifying month.
           </p>
         </div>
       </td></tr>`;
