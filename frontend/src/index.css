@@ -779,99 +779,68 @@ html, body {
   border-radius: 6px;
 }
 
-/* Auto-populate via API card */
+/* Auto-populate via API */
 .api-card {
-  background: linear-gradient(135deg, #0F1738 0%, #1F2A5C 100%);
+  background: white;
+  border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 32px;
-  color: white;
+  padding: 32px 32px 28px;
   text-align: center;
-  box-shadow: 0 12px 32px rgba(15, 23, 56, 0.2), 0 4px 12px rgba(15, 23, 56, 0.1);
-  margin-bottom: 24px;
+  box-shadow: 0 12px 32px rgba(15, 23, 56, 0.08), 0 2px 6px rgba(15, 23, 56, 0.04);
+  margin-bottom: 16px;
 }
-.api-card h2 {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 6px;
-  letter-spacing: -0.01em;
-}
-.api-card .api-subtitle { font-size: 14px; color: rgba(255,255,255,0.7); margin: 0 0 8px; }
-.api-card .api-emp-row {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-.api-card .api-emp-input {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.2);
-  background: rgba(255,255,255,0.1);
-  color: white;
-  outline: none;
-  width: 220px;
-  transition: border-color 140ms;
-}
-.api-card .api-emp-input::placeholder { color: rgba(255,255,255,0.4); }
-.api-card .api-emp-input:focus { border-color: rgba(255,255,255,0.5); }
+.api-card h2 { font-size: 16px; font-weight: 700; color: var(--navy-dark); margin: 0 0 4px; }
+.api-card .api-subtitle { font-size: 13px; color: var(--muted); margin: 0 0 18px; }
 .api-btn {
   font-family: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  padding: 14px 32px;
-  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: 8px;
   border: none;
   cursor: pointer;
-  background: #E08A2B;
+  background: var(--navy-dark);
   color: white;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  transition: all 160ms;
-  box-shadow: 0 4px 14px rgba(224, 138, 43, 0.35);
+  gap: 8px;
+  transition: background 140ms;
 }
-.api-btn:hover { background: #C97B24; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(224, 138, 43, 0.4); }
-.api-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+.api-btn:hover { background: var(--navy); }
+.api-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .api-btn svg { flex-shrink: 0; }
 .api-cancel-btn {
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  padding: 8px 18px;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.25);
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
   background: transparent;
-  color: rgba(255,255,255,0.85);
+  color: var(--muted);
   cursor: pointer;
   transition: all 140ms;
-  margin-top: 12px;
+  margin-top: 10px;
 }
-.api-cancel-btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.4); }
-.api-progress { margin-top: 20px; text-align: left; }
-.api-progress .progress { background: rgba(255,255,255,0.15); }
-.api-progress .progress-bar { background: #E08A2B; }
-.api-progress-text { margin-top: 10px; font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); text-align: center; }
-.api-progress-hint { margin-top: 6px; font-size: 12.5px; color: rgba(255,255,255,0.55); text-align: center; line-height: 1.5; }
+.api-cancel-btn:hover { background: var(--border-soft); color: var(--ink); }
+.api-progress { margin-top: 18px; text-align: left; }
+.api-progress-text { margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--ink); text-align: center; }
+.api-progress-hint { margin-top: 4px; font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.5; }
 .api-elapsed {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 20px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.95);
-  margin: 12px 0 4px;
-  letter-spacing: 0.02em;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 10px 0 2px;
 }
-.api-error { margin-top: 12px; font-size: 13px; color: #FCA5A5; line-height: 1.5; }
+.api-error { margin-top: 10px; font-size: 13px; color: var(--red); line-height: 1.5; }
 .api-divider {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin: 0 0 24px;
-  color: var(--muted);
-  font-size: 12px;
+  margin: 0 0 16px;
+  color: var(--muted-soft);
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
