@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppT2T3, type LoadStage } from '../../context/AppContextT2T3';
 import { LayoutT2T3 } from '../../components/LayoutT2T3';
 import { fetchFromBeats } from '../../lib/api';
+import { downloadInputAsExcel } from '../../lib/downloadInputData';
 
 export default function UploadPageT2T3() {
   const { loadFile, loadFromRows } = useAppT2T3();
@@ -21,6 +22,7 @@ export default function UploadPageT2T3() {
   const [apiError, setApiError] = useState('');
   const [apiCalcStage, setApiCalcStage] = useState<LoadStage | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [autoDownload, setAutoDownload] = useState(true);
 
   useEffect(() => {
     if (!apiFetching) { setApiElapsed(0); return; }
@@ -79,6 +81,7 @@ export default function UploadPageT2T3() {
         setApiFetching(false);
         return;
       }
+      if (autoDownload) downloadInputAsExcel(res.rmRows, res.dlRows, 't2t3');
       setApiFetching(false);
       const ok = await loadFromRows(res.rmRows, res.dlRows, 'Beats API', setApiCalcStage);
       setApiCalcStage(null);
@@ -148,9 +151,15 @@ export default function UploadPageT2T3() {
               <h2>Auto Populate via API</h2>
               <p className="api-subtitle">Pull the latest incentive data directly from Beats</p>
               {!apiFetching && !apiCalcStage ? (
-                <button className="api-btn" onClick={handleApiFetch} disabled={anyBusy}>
-                  Fetch from Beats API
-                </button>
+                <>
+                  <label className="api-download-toggle">
+                    <input type="checkbox" checked={autoDownload} onChange={(e) => setAutoDownload(e.target.checked)} />
+                    <span>Download input data as Excel</span>
+                  </label>
+                  <button className="api-btn" onClick={handleApiFetch} disabled={anyBusy}>
+                    Fetch from Beats API
+                  </button>
+                </>
               ) : null}
               {apiFetching && (
                 <div className="api-progress" role="status" aria-live="polite">

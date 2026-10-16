@@ -54,12 +54,14 @@ export interface Rm {
 
 export interface DealResult {
   deal: Deal;
+  provShare: number;
+  confShare: number;
   selfShare: number;
   teamShare: number;
   payable: number;
   payableBeforeShare?: number;
   shareApplied?: boolean;
-  whichApplies: 'self' | 'team' | 'none';
+  whichApplies: 'provisional' | 'confirmed' | 'self' | 'team' | 'none';
   calcNote: string;
   noReason: string;
   cashPayable: number;
@@ -72,10 +74,12 @@ export interface Calc {
   teamMultiplier: number;
   teamBelowPct: number;
   teamAbovePct: number;
-  selfIncentive: number;
+  selfProvBase: number;
+  selfProvIncentive: number;
   selfConfBase: number;
+  selfConfIncentive: number;
   selfPayable: number;
-  selfAllBase: number;
+  selfProvDeals: Deal[];
   selfConfDeals: Deal[];
   teamIncentive: number;
   teamConfBase: number;

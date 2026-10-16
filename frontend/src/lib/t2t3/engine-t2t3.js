@@ -444,18 +444,20 @@ function calculateIncentive(rm) {
   const teamAbovePct = isT2 ? 0.15 : 0.10;
   const teamTarget = teamMultiplier * teamYtdCost;
 
-  // ========== Self Incentive (flat 5% of confirmed self base) ==========
+  // ========== Self Incentive (dual-base: Provisional + Confirmed, flat 5%) ==========
+  // Provisional base: all self deals (excluding Not counted)
+  const selfProvDeals = rm.deals.filter(d => d.selfTeam === 'Self' && d.stage !== 'Not counted');
+  const selfProvBase = selfProvDeals.reduce((s, d) => s + d.revenue, 0);
+  const selfProvIncentive = selfProvBase > 0 ? 0.05 * selfProvBase : 0;
+
+  // Confirmed base: only Confirmed/Collected self deals (LoggedIn with coll>0 contribute NR×coll%)
   const selfConfDeals = rm.deals.filter(d => d.selfTeam === 'Self' && (d.stage === 'Confirmed' || d.stage === 'Collected'));
   const selfConfBase = selfConfDeals.reduce((s, d) => {
     if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
     if (d.isLoggedIn && d.collection === 0) return s;
     return s + d.revenue;
   }, 0);
-  const selfIncentive = 0.05 * selfConfBase;
-
-  // All self deals (for display)
-  const selfAllDeals = rm.deals.filter(d => d.selfTeam === 'Self' && d.stage !== 'Not counted');
-  const selfAllBase = selfAllDeals.reduce((s, d) => s + d.revenue, 0);
+  const selfConfIncentive = selfConfBase > 0 ? 0.05 * selfConfBase : 0;
 
   // ========== Team Incentive (slab-based) ==========
   const teamConfDeals = rm.deals.filter(d => d.selfTeam === 'Team' && (d.stage === 'Confirmed' || d.stage === 'Collected'));
@@ -480,25 +482,51 @@ function calculateIncentive(rm) {
     }
 
     if (d.selfTeam === 'Self') {
-      // Self deals: only confirmed/collected earn incentive (flat 5%)
-      if (d.stage === 'Counted') {
-        return { deal: d, selfShare: 0, teamShare: 0, payable: 0, whichApplies: 'none', calcNote: '', noReason: 'Counted — not yet confirmed', cashPayable: 0, esopPayable: 0 };
-      }
-      if (selfIncentive === 0) {
-        return { deal: d, selfShare: 0, teamShare: 0, payable: 0, whichApplies: 'none', calcNote: '', noReason: 'No confirmed self revenue', cashPayable: 0, esopPayable: 0 };
-      }
+      const provShare = selfProvBase > 0 ? selfProvIncentive * (d.revenue / selfProvBase) : 0;
       const confContrib = (d.isLoggedIn && d.collection > 0) ? d.revenue * (d.collection / 100) : d.revenue;
-      const share = selfConfBase > 0 ? selfIncentive * (confContrib / selfConfBase) : 0;
+      const confShare = (d.stage !== 'Counted' && selfConfBase > 0) ? selfConfIncentive * (confContrib / selfConfBase) : 0;
 
-      let payable, calcNote;
-      if (d.isLoggedIn && d.collection > 0) {
-        payable = share;
-        calcNote = '100% × ' + fmtINR(share) + ' (Logged In)';
+      let whichApplies, payable = 0, calcNote = '', noReason = '';
+      if (d.stage === 'Counted') {
+        if (d.type === 'Focus' && selfProvIncentive > 0) {
+          whichApplies = 'provisional';
+          payable = 0.25 * provShare;
+          calcNote = '25% × ' + fmtINR(provShare);
+        } else if (d.type === 'Non-Focus' && selfProvIncentive > 0) {
+          whichApplies = 'none';
+          noReason = 'Non-focus project';
+        } else {
+          whichApplies = 'none';
+          noReason = 'No self revenue';
+        }
       } else {
-        const rawPct = d.collection / 100;
-        const pct = Math.max(0.5, rawPct);
-        payable = pct * share;
-        calcNote = fmtPct(pct * 100) + (rawPct < 0.5 ? ' (floor)' : '') + ' × ' + fmtINR(share);
+        if (selfConfIncentive > 0) {
+          const rawPct = d.collection / 100;
+          const pct = (d.isLoggedIn && d.collection > 0) ? 1.0 : Math.max(0.5, rawPct);
+          const confPay = pct * confShare;
+          const advPay = (d.type === 'Focus' && selfProvIncentive > 0) ? 0.25 * provShare : 0;
+          if (advPay > confPay) {
+            whichApplies = 'provisional';
+            payable = advPay;
+            calcNote = '25% × ' + fmtINR(provShare);
+          } else {
+            whichApplies = 'confirmed';
+            payable = confPay;
+            calcNote = (d.isLoggedIn && d.collection > 0)
+              ? '100% × ' + fmtINR(confShare) + ' (Logged In)'
+              : fmtPct(pct * 100) + (rawPct < 0.5 ? ' (floor)' : '') + ' × ' + fmtINR(confShare);
+          }
+        } else if (d.type === 'Focus' && selfProvIncentive > 0) {
+          whichApplies = 'provisional';
+          payable = 0.25 * provShare;
+          calcNote = '25% × ' + fmtINR(provShare);
+        } else if (d.type === 'Non-Focus' && selfProvIncentive > 0) {
+          whichApplies = 'none';
+          noReason = 'Non-focus project';
+        } else {
+          whichApplies = 'none';
+          noReason = 'No self revenue';
+        }
       }
 
       let payableBeforeShare = payable;
@@ -509,7 +537,7 @@ function calculateIncentive(rm) {
         calcNote = calcNote + ' × ' + d.sharePct + '% (share)';
       }
 
-      return { deal: d, selfShare: share, teamShare: 0, payable, payableBeforeShare, shareApplied, whichApplies: 'self', calcNote, noReason: '', cashPayable: 0.80 * payable, esopPayable: 0.20 * payable };
+      return { deal: d, provShare, confShare, selfShare: Math.max(provShare, confShare), teamShare: 0, payable, payableBeforeShare, shareApplied, whichApplies, calcNote, noReason, cashPayable: 0.80 * payable, esopPayable: 0.20 * payable };
     }
 
     if (d.selfTeam === 'Team') {
@@ -585,8 +613,8 @@ function calculateIncentive(rm) {
   return {
     teamYtdCost,
     teamTarget, teamMultiplier, teamBelowPct, teamAbovePct,
-    selfIncentive, selfConfBase, selfPayable,
-    selfAllBase, selfConfDeals,
+    selfProvBase, selfProvIncentive, selfConfBase, selfConfIncentive, selfPayable,
+    selfProvDeals, selfConfDeals,
     teamIncentive, teamConfBase, teamCrossed, teamPayable,
     teamBelowAmt, teamAboveAmt,
     teamAllBase, teamConfDeals,
@@ -962,14 +990,13 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       </table>`;
   };
 
-  // Confirmed flow chart (3-box diagram: Confirmed Incentive → Deal Incentive Share → Payable)
-  const buildConfirmedFlow = (incentiveAmt) => {
+  // Flow chart (3-box diagram: [label] → Deal Incentive Share → Payable)
+  const buildFlowDiagram = (incentiveAmt, label = 'Confirmed Incentive') => {
     if (incentiveAmt <= 0) return '';
     return `
-      <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 20px 0 6px 0; font-weight: 700;">Confirmed flow</p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; margin: 10px 0;"><tr>
         <td style="background: ${T.NAVY_SOFT}; border: 1.5px solid ${T.NAVY}; border-radius: 6px; padding: 10px 6px; text-align: center; vertical-align: middle;">
-          <div style="font-family: ${T.FONT}; font-size: 11.5px; font-weight: 700; color: ${T.NAVY}; line-height: 1.3;">Confirmed Incentive</div>
+          <div style="font-family: ${T.FONT}; font-size: 11.5px; font-weight: 700; color: ${T.NAVY}; line-height: 1.3;">${label}</div>
           <div style="font-family: ${T.MONO}; font-size: 10px; color: ${T.INK_SOFT}; margin-top: 3px;">${fmtINR(incentiveAmt)}</div>
         </td>
         <td style="width: 20px; text-align: center; vertical-align: middle; font-family: ${T.MONO}; font-size: 18px; color: ${T.NAVY}; font-weight: 700;">→</td>
@@ -1034,7 +1061,8 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       ${c.teamTarget > 0 ? slabVisual(c.teamTarget, c.teamConfBase, c.teamIncentive, c.teamBelowPct, c.teamAbovePct, 'Confirmed Incentive (Team)') : ''}
     </td></tr>` + (c.teamIncentive > 0 ? sectionH(nextNo(), 'Per-deal payable') + `<tr><td style="padding: 4px 0 12px 0;">
       ${bulletList(['For each deal we compute a <strong>Deal Incentive Share</strong>, then apply the rule that fits the deal.'])}
-      ${buildConfirmedFlow(c.teamIncentive)}
+      <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 20px 0 6px 0; font-weight: 700;">Confirmed flow</p>
+      ${buildFlowDiagram(c.teamIncentive, 'Confirmed Incentive')}
       ${formulaCard('CONFIRMED PAYABLE FORMULA', [
         'Deal Incentive Share = Confirmed Incentive × (Deal Revenue ÷ Total Confirmed Incentive Deal Revenue)',
         '',
@@ -1062,33 +1090,138 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     ${buildDealTable(selfDeals, 'Self')}
   </td></tr>`;
 
-  // STEP 6: Self Incentive Calculation
+  // STEP 6: Self Incentive Calculation (Provisional + Confirmed)
   // STEP 7: Per-deal payable (Self) — conditional
   let step6Html = '';
   if (selfDeals.length > 0) {
+    const selfProvDealsList = c.selfProvDeals || selfDeals.filter(d => d.stage !== 'Not counted');
     const selfConfDealsList = c.selfConfDeals || selfDeals.filter(d => d.stage === 'Confirmed' || d.stage === 'Collected');
-    step6Html = sectionH(nextNo(), 'Confirmed Incentive (Self) Calculation') + `<tr><td style="padding: 4px 0 12px 0;">
+    const sumFormula = (deals) => deals.map(d => `${escapeHtml(d.tcfId)} (${fmtL(d.revenue)})`).join(' + ');
+
+    step6Html = sectionH(nextNo(), 'Both Incentives — Provisional and Confirmed (Self)') + `<tr><td style="padding: 4px 0 12px 0;">
       ${bulletList([
-        `<strong>Rule:</strong> Confirmed Incentive (Self) = 5% × Confirmed Self Deal Revenue`,
-        `<strong>Confirmed Self Revenue:</strong> ${selfConfDealsList.length > 0 ? confSumFormula(selfConfDealsList) + ' = ' + fmtINR(c.selfConfBase) : '₹0 (no confirmed/collected self deals)'}`,
-        `<strong>Confirmed Incentive (Self) = 5% × ${fmtINR(c.selfConfBase)} = ${fmtINR(c.selfIncentive)}</strong>`
+        `Two incentives are computed side by side: <strong>Provisional</strong> (all Self deals incl. Counted &amp; Logged In) and <strong>Confirmed</strong> (Confirmed, Collected and Logged In Self deals).`,
+        `<strong>Rule:</strong> 5% × total self deal revenue (flat rate, no target threshold).`
       ])}
-    </td></tr>` + (c.selfIncentive > 0 ? sectionH(nextNo(), 'Per-deal payable') + `<tr><td style="padding: 4px 0 12px 0;">
-      ${bulletList(['For each deal we compute a <strong>Deal Incentive Share</strong>, then apply the rule that fits the deal.'])}
-      ${buildConfirmedFlow(c.selfIncentive)}
-      ${formulaCard('CONFIRMED PAYABLE FORMULA', [
-        'Deal Incentive Share = Confirmed Incentive × (Deal Revenue ÷ Total Confirmed Incentive Deal Revenue)',
-        '',
-        '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
-        '<span style="color: #FDB744;">Payout will be based on whichever is higher: 50% or actual collection.</span>'
-      ])}
+      <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 12px 0 6px 0; font-weight: 700;">Provisional Incentive (Self)</p>
+      ${selfProvDealsList.length === 0
+        ? bulletList([`<strong>Provisional Incentive (Self) = ₹0.</strong>`])
+        : bulletList([
+            `<strong>Total Provisional Self Revenue:</strong> ${sumFormula(selfProvDealsList)} = ${fmtINR(c.selfProvBase)}`,
+            `<strong>Provisional Incentive (Self) = 5% × ${fmtINR(c.selfProvBase)} = ${fmtINR(c.selfProvIncentive)}</strong>`
+          ])
+      }
+      <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 16px 0 6px 0; font-weight: 700;">Confirmed Incentive (Self)</p>
+      ${selfConfDealsList.length === 0
+        ? bulletList([`No Confirmed/Collected self deals. <strong>Confirmed Incentive (Self) = ₹0.</strong>`])
+        : bulletList([
+            `<strong>Total Confirmed Self Revenue:</strong> ${confSumFormula(selfConfDealsList)} = ${fmtINR(c.selfConfBase)}`,
+            `<strong>Confirmed Incentive (Self) = 5% × ${fmtINR(c.selfConfBase)} = ${fmtINR(c.selfConfIncentive)}</strong>`
+          ])
+      }
+    </td></tr>` + ((c.selfProvIncentive > 0 || c.selfConfIncentive > 0) ? sectionH(nextNo(), 'Per-deal payable (Self)') + `<tr><td style="padding: 4px 0 12px 0;">
+      ${bulletList([`For each deal we compute a <strong>Deal Incentive Share</strong> from both bases, then the <strong>higher</strong> payable applies.`])}
+      ${c.selfProvIncentive > 0 ? `
+        <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 16px 0 6px 0; font-weight: 700;">Provisional flow</p>
+        ${buildFlowDiagram(c.selfProvIncentive, 'Provisional Incentive')}
+        ${formulaCard('PROVISIONAL PAYABLE FORMULA', [
+          'Deal Incentive Share = Provisional Incentive × (Deal Revenue ÷ Total Provisional Self Revenue)',
+          '',
+          '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
+          '<span style="display: inline-block; width: 19ch;">For Focus deal</span>→ Provisional Payable = <span style="color: #FDB744;">25%</span> × Deal Incentive Share',
+          '<span style="display: inline-block; width: 19ch;">For Non-Focus deal</span>→ Provisional Payable = <span style="color: #FDB744;">₹0</span>'
+        ])}` : ''}
+      ${c.selfConfIncentive > 0 ? `
+        <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 20px 0 6px 0; font-weight: 700;">Confirmed flow</p>
+        ${buildFlowDiagram(c.selfConfIncentive, 'Confirmed Incentive')}
+        ${formulaCard('CONFIRMED PAYABLE FORMULA', [
+          'Deal Incentive Share = Confirmed Incentive × (Deal Revenue ÷ Total Confirmed Self Revenue)',
+          '',
+          '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
+          '<span style="color: #FDB744;">Payout will be based on whichever is higher: 50% or actual collection.</span>'
+        ])}` : ''}
       <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 22px 0 6px 0; font-weight: 700;">Per-deal payable table</p>
-      ${buildPerDealTable(selfDealResults, c.selfIncentive, c.selfConfBase, 'Self', c.selfPayable)}
+      ${(() => {
+        const shareCellHtml = (inc, share, dealRev, base, applies) => {
+          if (share <= 0 || base <= 0) return `<td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; text-align: right; color: ${T.MUTED}; font-size: 14px;">-</td>`;
+          const bgCol = applies ? '#ECFDF5' : 'transparent';
+          const borderLeft = applies ? `border-left: 3px solid ${T.GREEN};` : '';
+          const resultCol = applies ? T.GREEN_DEEP : T.NAVY;
+          return `<td style="padding: 10px 12px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; background: ${bgCol}; ${borderLeft}">
+            <div style="font-family: ${T.MONO}; font-size: 10px; color: ${T.MUTED}; text-align: right; line-height: 1.3;">${fmtINR(inc)} × (${fmtL(dealRev)} ÷ ${fmtL(base)})</div>
+            <div style="font-family: ${T.MONO}; font-size: 13.5px; font-weight: 700; color: ${resultCol}; text-align: right; margin-top: 3px;">= ${fmtINR(share)}</div>
+          </td>`;
+        };
+        let rows = '';
+        selfDealResults.forEach(dr => {
+          const d = dr.deal;
+          const shareTag = d.sharePct !== 100 ? `<br><span style="font-family: ${T.FONT}; font-size: 9px; color: ${T.ORANGE_DEEP}; font-weight: 700;">Share ${d.sharePct}%</span>` : '';
+          if (d.stage === 'Not counted') {
+            rows += `<tr>
+              <td style="padding: 10px 8px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.MONO}; font-size: 10px; color: ${T.INK};">${tcfCell(d, { withProject: true })}${shareTag}</td>
+              <td style="padding: 10px 8px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.MONO}; font-size: 10.5px; text-align: right; color: ${T.INK}; white-space: nowrap;">${fmtINR(d.revenue)}</td>
+              <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle;"><span style="background: ${T.RED_SOFT}; color: ${T.RED_DEEP}; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">Not counted</span></td>
+              <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; text-align: right; color: ${T.MUTED}; font-size: 14px;">-</td>
+              <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; text-align: right; color: ${T.MUTED}; font-size: 14px;">-</td>
+              <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.FONT}; font-size: 10.5px; text-align: center;"><strong style="color: ${T.MUTED};">No incentive</strong><br><span style="color: ${T.MUTED}; font-size: 10.5px; font-style: italic;">Not counted deal</span></td>
+              <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.MONO}; font-size: 13.5px; font-weight: 700; text-align: right; color: ${T.INK};">₹0</td>
+            </tr>`;
+            return;
+          }
+          const provApplies = dr.whichApplies === 'provisional';
+          const confApplies = dr.whichApplies === 'confirmed';
+          const provShareCell = shareCellHtml(c.selfProvIncentive, dr.provShare, d.revenue, c.selfProvBase, provApplies);
+          const showConf = d.stage !== 'Counted' && dr.confShare > 0;
+          const confDealRev = (d.isLoggedIn && d.collection > 0) ? d.revenue * (d.collection / 100) : d.revenue;
+          const confShareCell = showConf
+            ? shareCellHtml(c.selfConfIncentive, dr.confShare, confDealRev, c.selfConfBase, confApplies)
+            : `<td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; text-align: right; color: ${T.MUTED}; font-size: 14px;">-</td>`;
+          let whichCell;
+          if (dr.whichApplies === 'provisional') {
+            whichCell = `<strong style="color: ${T.GREEN_DEEP};">Provisional</strong><br><span style="color: ${T.INK_SOFT}; font-size: 10.5px;">25% focus advance</span>`;
+          } else if (dr.whichApplies === 'confirmed') {
+            whichCell = d.isLoggedIn
+              ? `<strong style="color: #1E40AF;">Logged In</strong><br><span style="color: ${T.INK_SOFT}; font-size: 10.5px;">NR×${fmtPct(d.collection)} in base, 100% payout</span>`
+              : `<strong style="color: ${T.ORANGE_DEEP};">Confirmed</strong><br><span style="color: ${T.INK_SOFT}; font-size: 10.5px;">Collection ${fmtPct(d.collection)}</span>`;
+          } else {
+            whichCell = `<strong style="color: ${T.MUTED};">No incentive</strong>` + (dr.noReason ? `<br><span style="color: ${T.MUTED}; font-size: 10.5px; font-style: italic;">${escapeHtml(dr.noReason)}</span>` : '');
+          }
+          const payCell = dr.payable > 0
+            ? `<div style="font-family: ${T.MONO}; font-size: 10px; color: ${T.MUTED}; text-align: right; line-height: 1.3;">${dr.calcNote}</div><div style="font-family: ${T.MONO}; font-size: 13.5px; font-weight: 700; color: ${T.NAVY}; text-align: right; margin-top: 3px;">= ${fmtINR(dr.payable)}</div>`
+            : `<div style="font-family: ${T.MONO}; font-size: 13.5px; font-weight: 700; color: ${T.INK}; text-align: right;">₹0</div>`;
+          rows += `<tr>
+            <td style="padding: 10px 8px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.MONO}; font-size: 10px; color: ${T.INK};">${tcfCell(d, { withProject: true })}${shareTag}</td>
+            <td style="padding: 10px 8px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.MONO}; font-size: 10.5px; text-align: right; color: ${T.INK}; white-space: nowrap;">${fmtINR(d.revenue)}</td>
+            <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.FONT}; font-size: 11px; color: ${T.INK_SOFT};">${d.isLoggedIn ? 'Logged In' : d.stage}<br>${d.type}</td>
+            ${provShareCell}
+            ${confShareCell}
+            <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; font-family: ${T.FONT}; font-size: 10.5px; text-align: center; line-height: 1.35;">${whichCell}</td>
+            <td style="padding: 10px; border-bottom: 1px solid ${T.BORDER}; vertical-align: middle; text-align: right;">${payCell}</td>
+          </tr>`;
+        });
+        const totalRow = `<tr style="background: ${T.NAVY_SOFT};">
+          <td colspan="6" style="padding: 12px; font-family: ${T.FONT}; font-size: 13px; font-weight: 700; color: ${T.NAVY}; text-align: right;">Total Self Payable</td>
+          <td style="padding: 12px; font-family: ${T.MONO}; font-size: 14px; font-weight: 700; color: ${T.NAVY}; text-align: right;">${fmtINR(c.selfPayable)}</td>
+        </tr>`;
+        return `
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; border: 1px solid ${T.BORDER}; border-radius: 6px; overflow: hidden;">
+            <thead><tr style="background: ${T.NAVY};">
+              <th style="padding: 9px 10px; text-align: left; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">TCF ID</th>
+              <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Deal Revenue</th>
+              <th style="padding: 9px 10px; text-align: left; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Stage &amp; Type</th>
+              <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Provisional Deal Incentive Share<div style="font-family: ${T.MONO}; font-size: 9.5px; font-weight: 500; color: rgba(255,255,255,0.6); margin-top: 3px; line-height: 1.35;">Prov Inc × Deal Rev ÷ Total Prov Rev</div></th>
+              <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Confirmed Deal Incentive Share<div style="font-family: ${T.MONO}; font-size: 9.5px; font-weight: 500; color: rgba(255,255,255,0.6); margin-top: 3px; line-height: 1.35;">Conf Inc × Deal Rev ÷ Total Conf Rev</div></th>
+              <th style="padding: 9px 10px; text-align: center; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Which Incentive applies</th>
+              <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Final Payable</th>
+            </tr></thead>
+            <tbody>${rows}${totalRow}</tbody>
+          </table>`;
+      })()}
       ${buildBreakupTable(selfDealResults, c.selfPayable, 0.80 * c.selfPayable, 0.20 * c.selfPayable)}
     </td></tr>` : '');
   } else {
-    step6Html = sectionH(nextNo(), 'Confirmed Incentive (Self) Calculation') + `<tr><td style="padding: 4px 0 12px 0;">
-      ${bulletList(['No self deals this cycle. Confirmed Incentive (Self) = ₹0.'])}
+    step6Html = sectionH(nextNo(), 'Both Incentives — Provisional and Confirmed (Self)') + `<tr><td style="padding: 4px 0 12px 0;">
+      ${bulletList(['No self deals this cycle. Provisional and Confirmed Incentive (Self) = ₹0.'])}
     </td></tr>`;
   }
 
@@ -1353,7 +1486,8 @@ function generatePlainText(rm) {
   lines.push(`Team Payable = ${fmtINR(c.teamPayable)}`);
   lines.push('');
   lines.push('--- SELF INCENTIVE ---');
-  lines.push(`Confirmed Incentive (Self) (5% of confirmed self revenue) = ${fmtINR(c.selfIncentive)}`);
+  lines.push(`Provisional Incentive (Self) (5% of all self revenue) = ${fmtINR(c.selfProvIncentive)}`);
+  lines.push(`Confirmed Incentive (Self) (5% of confirmed self revenue) = ${fmtINR(c.selfConfIncentive)}`);
   lines.push(`Self Payable = ${fmtINR(c.selfPayable)}`);
   lines.push('');
   lines.push('--- COMBINED ---');

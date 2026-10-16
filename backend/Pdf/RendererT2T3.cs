@@ -179,6 +179,12 @@ public class RendererT2T3
 
     string TcfList(IEnumerable<JsonElement> ds) => string.Join(", ", ds.Select(d => $"{d.Str("tcfId")} ({StgLabel(d)})"));
     string SumFormula(IEnumerable<JsonElement> ds) => string.Join(" + ", ds.Select(d => $"{d.Str("tcfId")} ({Fmt.Lakh(d.Num("revenue"))})"));
+    string ConfSumFormula(IEnumerable<JsonElement> ds) => string.Join(" + ", ds.Select(d =>
+    {
+        if (d.Bool("isLoggedIn") && d.Num("collection") > 0)
+            return $"{d.Str("tcfId")} ({Fmt.Lakh(d.Num("revenue"))} × {Fmt.Pct(d.Num("collection"))} = {Fmt.Lakh(d.Num("revenue") * d.Num("collection") / 100)})";
+        return $"{d.Str("tcfId")} ({Fmt.Lakh(d.Num("revenue"))})";
+    }));
 
     void ShareCell(IContainer x, double inc, double share, double rev, double bas, bool applies)
     {
@@ -403,57 +409,96 @@ public class RendererT2T3
         DealTable(s, selfDeals);
     }
 
-    // ---------- Step 5: Self Incentive (Flat 5%) ----------
+    // ---------- Step 5: Self Incentive (Dual-base: Provisional + Confirmed, flat 5%) ----------
     void Step5(ColumnDescriptor s)
     {
-        SectionH(s, NextNo(), "Confirmed Incentive (Self) Calculation");
+        SectionH(s, NextNo(), "Both Incentives — Provisional and Confirmed (Self)");
         var selfDeals = deals.Where(d => d.Str("selfTeam") == "Self" && d.Str("stage") != "Not counted").ToList();
         if (selfDeals.Count == 0)
         {
-            Bullets(s, "No counted Self deals this cycle. **Confirmed Incentive (Self) = ₹0.**");
+            Bullets(s, "No self deals this cycle. Provisional and Confirmed Incentive (Self) = ₹0.");
             return;
         }
 
+        double selfProvBase = c.Num("selfProvBase");
+        double selfProvIncentive = c.Num("selfProvIncentive");
         double selfConfBase = c.Num("selfConfBase");
-        double selfIncentive = c.Num("selfIncentive");
+        double selfConfIncentive = c.Num("selfConfIncentive");
         double selfPayable = c.Num("selfPayable");
 
+        var provSelfDeals = selfDeals;
         var confSelfDeals = deals.Where(d => d.Str("selfTeam") == "Self" && d.Str("stage") is "Confirmed" or "Collected").ToList();
 
         Bullets(s,
-            "**Rule:** Confirmed Incentive (Self) = 5% × Confirmed Self Deal Revenue",
-            "Only Confirmed and Collected Self deals contribute.");
+            "Two incentives are computed side by side: **Provisional** (all Self deals incl. Counted & Logged In) and **Confirmed** (Confirmed, Collected and Logged In Self deals).",
+            "**Rule:** 5% × total self deal revenue (flat rate, no target threshold).");
 
-        if (selfConfBase == 0)
+        SubHead(s, "Provisional Incentive (Self)", 12);
+        if (provSelfDeals.Count == 0)
         {
-            Bullets(s,
-                "**Deals used:** none – no Confirmed or Collected Self deals this cycle.",
-                "**Confirmed Incentive (Self) = ₹0.**");
+            Bullets(s, "**Provisional Incentive (Self) = ₹0.**");
         }
         else
         {
             s.Item().ShowEntire().Column(grp =>
             {
                 Bullets(grp,
-                    $"**Deals used:** {TcfList(confSelfDeals)} ({confSelfDeals.Count} deal(s))",
-                    $"**Total Confirmed Self Revenue:** {SumFormula(confSelfDeals)} = {Fmt.Inr(selfConfBase)}");
+                    $"**Total Provisional Self Revenue:** {SumFormula(provSelfDeals)} = {Fmt.Inr(selfProvBase)}");
                 MonoBox(grp, new[]
                 {
-                    $"Confirmed Incentive (Self) = 5% × {Fmt.Inr(selfConfBase)} = **{Fmt.Inr(selfIncentive)}**",
+                    $"Provisional Incentive (Self) = 5% × {Fmt.Inr(selfProvBase)} = **{Fmt.Inr(selfProvIncentive)}**",
+                });
+            });
+        }
+
+        SubHead(s, "Confirmed Incentive (Self)", 16);
+        if (confSelfDeals.Count == 0)
+        {
+            Bullets(s, "No Confirmed/Collected self deals. **Confirmed Incentive (Self) = ₹0.**");
+        }
+        else
+        {
+            s.Item().ShowEntire().Column(grp =>
+            {
+                Bullets(grp,
+                    $"**Total Confirmed Self Revenue:** {ConfSumFormula(confSelfDeals)} = {Fmt.Inr(selfConfBase)}");
+                MonoBox(grp, new[]
+                {
+                    $"Confirmed Incentive (Self) = 5% × {Fmt.Inr(selfConfBase)} = **{Fmt.Inr(selfConfIncentive)}**",
                 });
             });
         }
 
         if (selfPayable > 0)
         {
-            SubHead(s, "Per-deal payable", 16);
-            Flow(s, new[] { ("Confirmed Incentive", Fmt.Inr(selfIncentive)), ("Deal Incentive Share", "Incentive × Rev÷Total"), ("Payable", "Payout will be based on whichever is higher: 50% or actual collection.") });
-            FormulaCard(s, "CONFIRMED PAYABLE FORMULA", new[]
+            SectionH(s, NextNo(), "Per-deal payable (Self)");
+            Bullets(s, "For each deal we compute a **Deal Incentive Share** from both bases, then the **higher** payable applies.");
+
+            if (selfProvIncentive > 0)
             {
-                "Deal Incentive Share = Confirmed Incentive × (Deal Revenue ÷ Total Confirmed Incentive Deal Revenue)", "",
-                "[[Then per-deal:]]",
-                "{{Payout will be based on whichever is higher: 50% or actual collection.}}",
-            });
+                SubHead(s, "Provisional flow", 16);
+                Flow(s, new[] { ("Provisional Incentive", Fmt.Inr(selfProvIncentive)), ("Deal Incentive Share", "Incentive × Rev÷Total"), ("Payable", "25% (Focus) or ₹0") });
+                FormulaCard(s, "PROVISIONAL PAYABLE FORMULA", new[]
+                {
+                    "Deal Incentive Share = Provisional Incentive × (Deal Revenue ÷ Total Provisional Self Revenue)", "",
+                    "[[Then per-deal:]]",
+                    "{{For Focus deal → Provisional Payable = 25% × Deal Incentive Share}}",
+                    "{{For Non-Focus deal → Provisional Payable = ₹0}}",
+                });
+            }
+
+            if (selfConfIncentive > 0)
+            {
+                SubHead(s, "Confirmed flow", 20);
+                Flow(s, new[] { ("Confirmed Incentive", Fmt.Inr(selfConfIncentive)), ("Deal Incentive Share", "Incentive × Rev÷Total"), ("Payable", "Payout will be based on whichever is higher: 50% or actual collection.") });
+                FormulaCard(s, "CONFIRMED PAYABLE FORMULA", new[]
+                {
+                    "Deal Incentive Share = Confirmed Incentive × (Deal Revenue ÷ Total Confirmed Self Revenue)", "",
+                    "[[Then per-deal:]]",
+                    "{{Payout will be based on whichever is higher: 50% or actual collection.}}",
+                });
+            }
+
             SubHead(s, "Per-deal payable table", 16);
             SelfPayTable(s);
         }
@@ -667,14 +712,15 @@ public class RendererT2T3
         });
     }
 
-    // ---------- Self per-deal payable table ----------
+    // ---------- Self per-deal payable table (dual-base: Provisional + Confirmed) ----------
     void SelfPayTable(ColumnDescriptor s)
     {
-        double selfInc = c.Num("selfIncentive"), selfBase = c.Num("selfConfBase");
+        double selfProvInc = c.Num("selfProvIncentive"), selfProvBase = c.Num("selfProvBase");
+        double selfConfInc = c.Num("selfConfIncentive"), selfConfBase = c.Num("selfConfBase");
         var selfResults = results.Where(r => r.GetProperty("deal").Str("selfTeam") == "Self").ToList();
         s.Item().Table(t =>
         {
-            t.ColumnsDefinition(cd => { cd.RelativeColumn(1.8f); cd.RelativeColumn(1.2f); cd.RelativeColumn(1.0f); cd.RelativeColumn(1.8f); cd.RelativeColumn(1.2f); cd.RelativeColumn(1.5f); });
+            t.ColumnsDefinition(cd => { cd.RelativeColumn(1.6f); cd.RelativeColumn(1.0f); cd.RelativeColumn(0.9f); cd.RelativeColumn(1.6f); cd.RelativeColumn(1.6f); cd.RelativeColumn(1.2f); cd.RelativeColumn(1.3f); });
             void Head(string h, string? sub, bool right, bool center)
             {
                 var cell = t.Cell().Element(HCell);
@@ -688,8 +734,9 @@ public class RendererT2T3
             Head("TCF ID", null, false, false);
             Head("Deal Revenue", null, true, false);
             Head("Stage & Type", null, false, false);
-            Head("Confirmed Deal Incentive Share", "Conf Inc × Deal Rev ÷ Total Conf Rev", true, false);
-            Head("Collection %", null, false, false);
+            Head("Provisional Share", "Prov Inc × Rev ÷ Prov Rev", true, false);
+            Head("Confirmed Share", "Conf Inc × Rev ÷ Conf Rev", true, false);
+            Head("Which Applies", null, false, true);
             Head("Final Payable", null, true, false);
 
             foreach (var dr in selfResults)
@@ -701,6 +748,7 @@ public class RendererT2T3
                 if (stage == "Not counted")
                 {
                     Badge(t.Cell().Element(BCell), "Not counted", RED_SOFT, RED_DEEP);
+                    t.Cell().Element(BCell).AlignRight().Text("-").FontSize(P(14)).FontColor(MUTED);
                     t.Cell().Element(BCell).AlignRight().Text("-").FontSize(P(14)).FontColor(MUTED);
                     t.Cell().Element(BCell).AlignCenter().Column(col =>
                     {
@@ -715,10 +763,50 @@ public class RendererT2T3
                 t.Cell().Element(BCell).Text(x => { x.Span(StgLabel(d)).FontSize(P(11)).FontColor(INK_SOFT); x.Span("\n" + d.Str("type")).FontSize(P(11)).FontColor(INK_SOFT); });
 
                 var isLI = d.Bool("isLoggedIn") && d.Num("collection") > 0;
-                var dealRev = isLI ? d.Num("revenue") * (d.Num("collection") / 100) : d.Num("revenue");
-                ShareCell(t.Cell(), selfInc, dr.Num("selfShare"), dealRev, selfBase, which == "self");
+                var provApplies = which == "provisional";
+                var confApplies = which == "confirmed";
 
-                t.Cell().Element(BCell).Text(Fmt.Pct(d.Num("collection"))).FontFamily(MONO).Bold().FontSize(P(10.5));
+                ShareCell(t.Cell(), selfProvInc, dr.Num("provShare"), d.Num("revenue"), selfProvBase, provApplies);
+
+                var showConf = stage != "Counted" && dr.Num("confShare") > 0;
+                if (showConf)
+                {
+                    var confDealRev = isLI ? d.Num("revenue") * (d.Num("collection") / 100) : d.Num("revenue");
+                    ShareCell(t.Cell(), selfConfInc, dr.Num("confShare"), confDealRev, selfConfBase, confApplies);
+                }
+                else
+                {
+                    t.Cell().Element(BCell).AlignRight().Text("-").FontSize(P(14)).FontColor(MUTED);
+                }
+
+                t.Cell().Element(BCell).AlignCenter().Column(col =>
+                {
+                    if (which == "provisional")
+                    {
+                        col.Item().AlignCenter().Text("Provisional").Bold().FontSize(P(10.5)).FontColor(GREEN_DEEP);
+                        col.Item().AlignCenter().Text("25% focus advance").FontSize(P(10.5)).FontColor(INK_SOFT);
+                    }
+                    else if (which == "confirmed")
+                    {
+                        if (isLI)
+                        {
+                            col.Item().AlignCenter().Text("Logged In").Bold().FontSize(P(10.5)).FontColor("#1E40AF");
+                            col.Item().AlignCenter().Text($"NR×{Fmt.Pct(d.Num("collection"))} in base").FontSize(P(10.5)).FontColor(INK_SOFT);
+                        }
+                        else
+                        {
+                            col.Item().AlignCenter().Text("Confirmed").Bold().FontSize(P(10.5)).FontColor(ORANGE_DEEP);
+                            col.Item().AlignCenter().Text($"Collection {Fmt.Pct(d.Num("collection"))}").FontSize(P(10.5)).FontColor(INK_SOFT);
+                        }
+                    }
+                    else
+                    {
+                        col.Item().AlignCenter().Text("No incentive").Bold().FontSize(P(10.5)).FontColor(MUTED);
+                        var reason = dr.Str("noReason");
+                        if (!string.IsNullOrEmpty(reason))
+                            col.Item().AlignCenter().Text(reason).Italic().FontSize(P(10.5)).FontColor(MUTED);
+                    }
+                });
 
                 t.Cell().Element(BCell).Column(col =>
                 {
@@ -730,7 +818,7 @@ public class RendererT2T3
                     else col.Item().AlignRight().Text("₹0").FontFamily(MONO).Bold().FontSize(P(13.5));
                 });
             }
-            t.Cell().ColumnSpan(5).Background(NAVY_SOFT).Padding(P(12)).AlignRight().Text("Total Self Payable").Bold().FontSize(P(13)).FontColor(NAVY);
+            t.Cell().ColumnSpan(6).Background(NAVY_SOFT).Padding(P(12)).AlignRight().Text("Total Self Payable").Bold().FontSize(P(13)).FontColor(NAVY);
             t.Cell().Background(NAVY_SOFT).Padding(P(12)).AlignRight().Text(Fmt.Inr(c.Num("selfPayable"))).FontFamily(MONO).Bold().FontSize(P(14)).FontColor(NAVY);
         });
     }
