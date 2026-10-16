@@ -7,6 +7,30 @@ export interface UploadResponse {
   error?: string;
 }
 
+export async function fetchFromBeats(
+  dataType: string,
+  signal?: AbortSignal,
+): Promise<UploadResponse> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}/api/beats/incentive-input`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ DataType: dataType }),
+      signal,
+    });
+  } catch {
+    return { success: false, error: 'Could not reach the server. Make sure the backend is running.' };
+  }
+  const text = await res.text();
+  if (!text) return { success: false, error: `Server returned empty response (${res.status})` };
+  try {
+    return JSON.parse(text) as UploadResponse;
+  } catch {
+    return { success: false, error: `Server error (${res.status}): ${text.slice(0, 200)}` };
+  }
+}
+
 export function uploadWorkbook(file: File, onUploadProgress?: (fraction: number) => void): Promise<UploadResponse> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();

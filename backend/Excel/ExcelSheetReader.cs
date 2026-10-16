@@ -11,7 +11,7 @@ namespace IncentiveTool.Api.Excel;
 /// </summary>
 public class ExcelSheetReader
 {
-    private static readonly string[] RmSheetNames = { "rms", "rm", "reps", "employees", "t2_t3", "t2/t3", "t2-t3", "t2t3", "t2", "t3" };
+    private static readonly string[] RmSheetNames = { "rms", "rm", "reps", "employees", "leaders", "leader", "t2_t3", "t2/t3", "t2-t3", "t2t3", "t2", "t3" };
     private static readonly string[] DealSheetNames = { "deals", "deal" };
 
     public (List<Dictionary<string, object?>> RmRows, List<Dictionary<string, object?>> DealRows) Read(Stream xlsxStream)

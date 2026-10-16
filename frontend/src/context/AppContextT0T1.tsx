@@ -25,6 +25,7 @@ interface AppState {
   setActiveRmId: (id: string | null) => void;
   toast: (msg: string, kind?: ToastKind) => void;
   loadFile: (file: File, onStage?: (stage: LoadStage) => void) => Promise<boolean>;
+  loadFromRows: (rmRows: Record<string, unknown>[], dlRows: Record<string, unknown>[], label: string, onStage?: (stage: LoadStage) => void) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -89,8 +90,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function loadFromRows(
+    rmRows: Record<string, unknown>[],
+    dlRows: Record<string, unknown>[],
+    label: string,
+    onStage?: (stage: LoadStage) => void,
+  ): Promise<boolean> {
+    const tick = () => new Promise<void>((r) => setTimeout(r, 0));
+    try {
+      onStage?.({ kind: 'calculating', percent: 0, detail: 'Validating rows' });
+      await tick();
+      const { rms: parsedRms, issues: parsedIssues, joinedCount: jc } = validateAndNormalize(rmRows, dlRows);
+      for (let i = 0; i < parsedRms.length; i++) {
+        parsedRms[i].calc = calculateIncentive(parsedRms[i]);
+        if (i % 100 === 99 || i === parsedRms.length - 1) {
+          onStage?.({
+            kind: 'calculating',
+            percent: Math.round(((i + 1) / parsedRms.length) * 100),
+            detail: `Calculating incentives for ${i + 1} of ${parsedRms.length} RMs`,
+          });
+          await tick();
+        }
+      }
+      setRms(parsedRms);
+      setIssues(parsedIssues);
+      setJoinedCount(jc);
+      setActiveRmId(null);
+      setNavStatus(label + ' · ' + parsedRms.length + ' RMs');
+      return true;
+    } catch (e) {
+      toast('Could not process data: ' + (e instanceof Error ? e.message : String(e)), 'err');
+      return false;
+    }
+  }
+
   return (
-    <Ctx.Provider value={{ rms, issues, joinedCount, navStatus, activeRmId, setActiveRmId, toast, loadFile, reset }}>
+    <Ctx.Provider value={{ rms, issues, joinedCount, navStatus, activeRmId, setActiveRmId, toast, loadFile, loadFromRows, reset }}>
       {children}
       <div className="toast-container">
         {toasts.map((t) => (
