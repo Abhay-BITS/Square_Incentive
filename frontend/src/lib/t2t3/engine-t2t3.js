@@ -143,6 +143,14 @@ function fyFromDollarDay(ddDateStr) {
     fyAprilLabel: 'April ' + fyStartYear,
   };
 }
+function fyAprilStart(ddDateRaw) {
+  const d = ddDateRaw instanceof Date ? ddDateRaw : toLocalDate(ddDateRaw);
+  if (isNaN(d.getTime())) return null;
+  const m = d.getMonth();
+  const y = d.getFullYear();
+  const fyStartYear = m >= 3 ? y : y - 1;
+  return new Date(fyStartYear, 3, 1);
+}
 // Months in the period: April of the financial year up to the month before the Dollar Day.
 function monthsFromDollarDay(ddDateStr) {
   const d = toLocalDate(ddDateStr);
@@ -251,16 +259,36 @@ function validateAndNormalize(rmRows, dlRows) {
     const ddDate = pick(r, 'Dollar Day Date','DD Date','Dollar Day');
     const priorPayable = pick(r, 'Prior Period Final Payable','Prior Period Payable','Back Payable FY24');
     const emailId = pick(r, 'EmailIDOfficial','Email ID Official','Email','EmailId','Official Email');
-    const t2EmailRaw = pick(r, 'T2Email','T2 Email');
-    const t3EmailRaw = pick(r, 'T3Email','T3 Email');
-    const pnlEmailRaw = pick(r, 'PnLEmail','PnL Email','PNLEmail');
+    const t2EmailRaw = pick(r, 'T2Email','T2 Email','T2_Email');
+    const t3EmailRaw = pick(r, 'T3Email','T3 Email','T3_Email');
+    const pnlEmailRaw = pick(r, 'PnLEmail','PnL Email','PNLEmail','PnL_Email');
     const dojRaw = pick(r, 'DOJ','Date of Joining','DateOfJoining');
-    const teamCostRaw = pick(r, 'Self+Team YTD Cost','Team YTD Cost','SelfTeamYTDCost','Self+Team Cost','Team Cost','Self & Team YTD Cost','YTD Team + Self','YTD Team+Self');
+    const teamCostRaw = pick(r, 'Self+Team YTD Cost','Team YTD Cost','SelfTeamYTDCost','Self+Team Cost','Team Cost','Self & Team YTD Cost','YTD Team + Self','YTD Team+Self','YTD Team + Self / YTD Self');
+    const startDateRaw = pick(r, 'Start Date','StartDate');
 
     if (!empCode) { issues.push({level:'err',loc:'RMs row '+rowNum,msg:'Missing Employee Code (primary key).'}); return; }
-    if (rmMap[empCode]) { issues.push({level:'err',loc:'RMs row '+rowNum,msg:'Duplicate Employee Code "'+empCode+'".'}); return; }
+    const normTier = tier ? String(tier).trim().toUpperCase() : '';
+    if (normTier === 'T0' || normTier === 'T1') return;
+    if (rmMap[empCode]) {
+      const ddForFY = ddDate || rmMap[empCode]._ddDate;
+      const fyStart = ddForFY ? fyAprilStart(ddForFY) : null;
+      const newStart = startDateRaw instanceof Date ? startDateRaw : (startDateRaw ? new Date(startDateRaw) : null);
+      const existingStart = rmMap[empCode]._startDate;
+      const newInFY = fyStart && newStart && newStart >= fyStart;
+      const existingInFY = fyStart && existingStart && existingStart >= fyStart;
+      if (newInFY && !existingInFY) {
+        const oldIdx = rms.indexOf(rmMap[empCode]);
+        if (oldIdx !== -1) rms.splice(oldIdx, 1);
+        delete rmMap[empCode];
+      } else if (newInFY && existingInFY && newStart > existingStart) {
+        const oldIdx = rms.indexOf(rmMap[empCode]);
+        if (oldIdx !== -1) rms.splice(oldIdx, 1);
+        delete rmMap[empCode];
+      } else {
+        return;
+      }
+    }
     if (!name) issues.push({level:'err',loc:empCode,msg:'Missing Full Name.'});
-    if (!tier || !['T2','T3'].includes(String(tier).trim().toUpperCase())) issues.push({level:'err',loc:empCode,msg:'Tier must be T2 or T3 (got "'+tier+'").'});
 
     const validMonths = monthsFromDollarDay(fmtDate(ddDate)) || 1;
 
@@ -315,6 +343,8 @@ function validateAndNormalize(rmRows, dlRows) {
       pnlEmail: pnlEmailRaw ? String(pnlEmailRaw).trim() : '',
       doj: dojRaw ? fmtDate(dojRaw) : '',
       deals: [],
+      _startDate: startDateRaw instanceof Date ? startDateRaw : (startDateRaw ? new Date(startDateRaw) : null),
+      _ddDate: ddDate,
     };
     rmMap[rm.empCode] = rm;
     rms.push(rm);
@@ -328,7 +358,7 @@ function validateAndNormalize(rmRows, dlRows) {
     const tcfLinkIdRaw = pick(r, 'TCF ID','TCFID','Tcf Id','tcfidd');
     const projectName = pick(r, 'Project Name','Deal Name','Project','Name','ProductName') || '';
     const revenue = pick(r, 'Revenue','Amount');
-    const dealMonth = pick(r, 'Deal Month','Month','deal_month');
+    const dealMonth = pick(r, 'Deal Month','Month','deal_month','deal_Date','Deal Date');
     const stageRaw = pick(r, 'Stage','DealStatus');
     const typeRaw = pick(r, 'Type');
     const collectionRaw = pick(r, 'Collection %','Collection','Coll %');
@@ -336,7 +366,7 @@ function validateAndNormalize(rmRows, dlRows) {
     const sharePctRaw = pick(r, 'Share Percentage','Share %','Share');
 
     if (!rmId) { issues.push({level:'err',loc:'Deals row '+rowNum,msg:'Missing Employee Code.'}); return; }
-    if (!rmMap[rmId]) { issues.push({level:'err',loc:'Deals row '+rowNum,msg:'Orphan deal - Employee Code "'+rmId+'" not found.'}); return; }
+    if (!rmMap[rmId]) return;
     const rev = parseNum(revenue);
     if (isNaN(rev) || rev < 0) { issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Revenue invalid.'}); return; }
     let stage = normStage(stageRaw);
@@ -367,7 +397,7 @@ function validateAndNormalize(rmRows, dlRows) {
       if (collectionRaw !== null && collectionRaw !== '' && !isNaN(c) && c >= 99 && c < 100) {
         issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has Collection '+fmtPct(c)+' (not exactly 100%) - treating as 100%.'});
       } else if (collectionRaw !== null && collectionRaw !== '' && (isNaN(c) || c < 99)) {
-        issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal must have Collection 100% (got "'+collectionRaw+'").'}); return;
+        issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has Collection '+fmtPct(c)+' — treating as 100%.'});
       }
       if (collectionRaw === null || collectionRaw === '') {
         issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has no Collection %; treated as 100%.'});
@@ -599,7 +629,7 @@ function calculateIncentive(rm) {
 
   // Scenario
   let overallScenario;
-  if (rm.deals.length === 0 && backYearTotal === 0) overallScenario = 'no_deals';
+  if (rm.deals.length === 0) overallScenario = 'no_deals';
   else if (fyPayable === 0 && backYearTotal === 0) overallScenario = 'zero_payable';
   else if (totalPayable === 0) overallScenario = 'zero_payable';
   else if (due < 0) overallScenario = 'negative_due';
@@ -1366,12 +1396,68 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   };
 
   // Assemble steps into sections
-  const teamSectionHtml = sectionDivider('SECTION A · TEAM INCENTIVE', T.ORANGE_DEEP) + step1Html + step2Html + step3Html;
-  const selfSectionHtml = sectionDivider('SECTION B · SELF INCENTIVE', T.ORANGE_DEEP) + step5Html + step6Html;
-  const combinedSectionHtml = sectionDivider('COMBINED · FINAL CALCULATION', T.ORANGE_DEEP) + step7Html;
+  let fyBlockHtml;
+  if (c.overallScenario === 'no_deals') {
+    fyBlockHtml = `
+        <tr><td style="padding: 18px 28px 0 28px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: separate; border: 2px solid ${T.NAVY}; border-radius: 8px; overflow: hidden;">
+            <tr>
+              <td style="padding: 16px 20px; background: ${T.NAVY_SOFT}; border-bottom: 2px solid ${T.NAVY};">
+                <div style="font-family: ${T.FONT}; font-size: 17px; font-weight: 700; color: ${T.NAVY}; line-height: 1.25;">${c.fy.fyAprilLabel} Onwards · ${c.fy.fyLabel}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 28px 22px; background: white; text-align: center;">
+                <div style="font-family: ${T.FONT}; font-size: 15px; color: ${T.INK_SOFT}; line-height: 1.6;">You don't have any deals for this financial year.</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 14px 22px; background: #F8FAFC; border-top: 2px solid ${T.NAVY_SOFT};">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="font-family: ${T.MONO}; font-size: 10.5px; font-weight: 700; color: ${T.MUTED}; letter-spacing: 0.6px; text-transform: uppercase;">${c.fy.fyLabel} Total Payable (Self + Team)</td>
+                    <td style="font-family: ${T.MONO}; font-size: 18px; font-weight: 700; color: ${T.NAVY}; text-align: right;">${fmtINR(c.fyPayable)}</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td></tr>`;
+  } else {
+    const teamSectionHtml = sectionDivider('SECTION A · TEAM INCENTIVE', T.ORANGE_DEEP) + step1Html + step2Html + step3Html;
+    const selfSectionHtml = sectionDivider('SECTION B · SELF INCENTIVE', T.ORANGE_DEEP) + step5Html + step6Html;
+    const combinedSectionHtml = sectionDivider('COMBINED · FINAL CALCULATION', T.ORANGE_DEEP) + step7Html;
+    const stepsInsideHtml = teamSectionHtml + selfSectionHtml + combinedSectionHtml;
 
-  // Build FY block wrapper (Due Incentive, PIP, Disbursement are outside the FY block)
-  const stepsInsideHtml = teamSectionHtml + selfSectionHtml + combinedSectionHtml;
+    fyBlockHtml = `
+        <tr><td style="padding: 18px 28px 0 28px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: separate; border: 2px solid ${T.NAVY}; border-radius: 8px; overflow: hidden;">
+            <tr>
+              <td style="padding: 16px 20px; background: ${T.NAVY_SOFT}; border-bottom: 2px solid ${T.NAVY};">
+                <div style="font-family: ${T.FONT}; font-size: 17px; font-weight: 700; color: ${T.NAVY}; line-height: 1.25;">${c.fy.fyAprilLabel} Onwards · ${c.fy.fyLabel}</div>
+                <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 6px 0 0 0;">Deals from <strong>${rangeLabel}</strong> considered. Full calculation breakdown below.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 20px 22px; background: white;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
+                  ${stepsInsideHtml}
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 14px 22px; background: #F8FAFC; border-top: 2px solid ${T.NAVY_SOFT};">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="font-family: ${T.MONO}; font-size: 10.5px; font-weight: 700; color: ${T.MUTED}; letter-spacing: 0.6px; text-transform: uppercase;">${c.fy.fyLabel} Total Payable (Self + Team)</td>
+                    <td style="font-family: ${T.MONO}; font-size: 18px; font-weight: 700; color: ${T.NAVY}; text-align: right;">${fmtINR(c.fyPayable)}</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td></tr>`;
+  }
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1411,33 +1497,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           <p style="font-family: ${T.FONT}; font-size: 14px; color: ${T.INK}; line-height: 1.6; margin: 8px 0 0 0;">Below is your Incentive Statement for <strong>${month} Dollar Day</strong>.</p>
         </td></tr>
 
-        <tr><td style="padding: 18px 28px 0 28px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: separate; border: 2px solid ${T.NAVY}; border-radius: 8px; overflow: hidden;">
-            <tr>
-              <td style="padding: 16px 20px; background: ${T.NAVY_SOFT}; border-bottom: 2px solid ${T.NAVY};">
-                <div style="font-family: ${T.FONT}; font-size: 17px; font-weight: 700; color: ${T.NAVY}; line-height: 1.25;">${c.fy.fyAprilLabel} Onwards · ${c.fy.fyLabel}</div>
-                <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 6px 0 0 0;">Deals from <strong>${rangeLabel}</strong> considered. Full calculation breakdown below.</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding: 20px 22px; background: white;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
-                  ${stepsInsideHtml}
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding: 14px 22px; background: #F8FAFC; border-top: 2px solid ${T.NAVY_SOFT};">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                  <tr>
-                    <td style="font-family: ${T.MONO}; font-size: 10.5px; font-weight: 700; color: ${T.MUTED}; letter-spacing: 0.6px; text-transform: uppercase;">${c.fy.fyLabel} Total Payable (Self + Team)</td>
-                    <td style="font-family: ${T.MONO}; font-size: 18px; font-weight: 700; color: ${T.NAVY}; text-align: right;">${fmtINR(c.fyPayable)}</td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </td></tr>
+        ${fyBlockHtml}
 
         ${buildPriorPeriodsCard()}
 
@@ -1469,29 +1529,35 @@ function generatePlainText(rm) {
   const lines = [];
   lines.push(`Hi ${first},`, '');
   lines.push(`Below is your Incentive Statement for ${c.ddLabel} Dollar Day.`);
-  lines.push(`Deals from ${rangeLabel} considered.`);
   lines.push('');
-  if (c.overallScenario === 'positive') {
-    lines.push(`This-cycle cash in bank = ${fmtINR(c.dueForRelease)} (Due Incentive); ESOP = ${fmtINR(c.dueForRelease * 0.25)} (reverse-calc from cash)`);
-  } else if (c.overallScenario === 'held_pip') {
-    lines.push(`Held pending PIP clearance: ${fmtINR(c.due)}`);
+  if (c.overallScenario === 'no_deals') {
+    lines.push(`You don't have any deals for this financial year.`);
+    lines.push(`Total FY Payable = ${fmtINR(c.fyPayable)}`);
   } else {
-    lines.push(`This Dollar Day payable: Rs. 0`);
+    lines.push(`Deals from ${rangeLabel} considered.`);
+    lines.push('');
+    if (c.overallScenario === 'positive') {
+      lines.push(`This-cycle cash in bank = ${fmtINR(c.dueForRelease)} (Due Incentive); ESOP = ${fmtINR(c.dueForRelease * 0.25)} (reverse-calc from cash)`);
+    } else if (c.overallScenario === 'held_pip') {
+      lines.push(`Held pending PIP clearance: ${fmtINR(c.due)}`);
+    } else {
+      lines.push(`This Dollar Day payable: Rs. 0`);
+    }
+    lines.push('');
+    lines.push('--- TEAM INCENTIVE ---');
+    lines.push(`Self+Team YTD Cost = ${fmtINR(c.teamYtdCost)}`);
+    lines.push(`Team Target (${rm.tier === 'T2' ? '4x' : '3x'}) = ${fmtINR(c.teamTarget)}`);
+    lines.push(`Confirmed Incentive (Team) = ${fmtINR(c.teamIncentive)}`);
+    lines.push(`Team Payable = ${fmtINR(c.teamPayable)}`);
+    lines.push('');
+    lines.push('--- SELF INCENTIVE ---');
+    lines.push(`Provisional Incentive (Self) (5% of all self revenue) = ${fmtINR(c.selfProvIncentive)}`);
+    lines.push(`Confirmed Incentive (Self) (5% of confirmed self revenue) = ${fmtINR(c.selfConfIncentive)}`);
+    lines.push(`Self Payable = ${fmtINR(c.selfPayable)}`);
+    lines.push('');
+    lines.push('--- COMBINED ---');
+    lines.push(`Total FY Payable = ${fmtINR(c.fyPayable)}`);
   }
-  lines.push('');
-  lines.push('--- TEAM INCENTIVE ---');
-  lines.push(`Self+Team YTD Cost = ${fmtINR(c.teamYtdCost)}`);
-  lines.push(`Team Target (${rm.tier === 'T2' ? '4x' : '3x'}) = ${fmtINR(c.teamTarget)}`);
-  lines.push(`Confirmed Incentive (Team) = ${fmtINR(c.teamIncentive)}`);
-  lines.push(`Team Payable = ${fmtINR(c.teamPayable)}`);
-  lines.push('');
-  lines.push('--- SELF INCENTIVE ---');
-  lines.push(`Provisional Incentive (Self) (5% of all self revenue) = ${fmtINR(c.selfProvIncentive)}`);
-  lines.push(`Confirmed Incentive (Self) (5% of confirmed self revenue) = ${fmtINR(c.selfConfIncentive)}`);
-  lines.push(`Self Payable = ${fmtINR(c.selfPayable)}`);
-  lines.push('');
-  lines.push('--- COMBINED ---');
-  lines.push(`Total FY Payable = ${fmtINR(c.fyPayable)}`);
   lines.push(`Already Paid = ${fmtINR(c.alreadyPaid)}`);
   lines.push(`Due = ${fmtINR(c.due)}`);
   lines.push('');
