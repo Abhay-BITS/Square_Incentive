@@ -454,15 +454,12 @@ function validateAndNormalize(rmRows, dlRows) {
       }
     } else if (stage === 'Collected') {
       const c = collNorm;
-      if (collectionRaw !== null && collectionRaw !== '' && !isNaN(c) && c >= 99 && c < 100) {
-        issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has Collection '+fmtPct(c)+' (not exactly 100%) - treating as 100%.'});
-      } else if (collectionRaw !== null && collectionRaw !== '' && (isNaN(c) || c < 99)) {
-        issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has Collection '+fmtPct(c)+' — treating as 100%.'});
-      }
-      if (collectionRaw === null || collectionRaw === '') {
+      if (collectionRaw === null || collectionRaw === '' || isNaN(c)) {
         issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has no Collection %; treated as 100%.'});
+        collection = 100;
+      } else {
+        collection = c;
       }
-      collection = 100;
     } else if (stage === 'Counted') {
       const c = collNorm;
       if (collectionRaw !== null && collectionRaw !== '' && !isNaN(c) && c > 0) {
