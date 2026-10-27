@@ -997,7 +997,8 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       ? `${incentiveLabel} = ₹0 <span style="font-family: ${T.FONT}; font-weight: 500; font-style: italic; font-size: 12px; color: ${T.MUTED};">· revenue below target</span>`
       : `${incentiveLabel} = ${fmtINR(belowAmt)} + ${fmtINR(aboveAmt)} = ${fmtINR(incentiveAmt)}`;
 
-    const slabMultiplierLabel = (blockTier || rm.tier) === 'T2' ? 'SMx 4×' : 'SMx 3×';
+    const _st = blockTier || rm.tier;
+    const slabMultiplierLabel = (_st === 'T0' || _st === 'T1') ? 'SMx 5×' : _st === 'T2' ? 'SMx 4×' : 'SMx 3×';
 
     const dashedLineDiv = state === 'below_target' && revenueAmt > 0
       ? `<div style="position: absolute; left: ${(revenueAmt / targetAmt * targetWidth).toFixed(2)}%; top: 26px; height: 78px; border-left: 2px dashed ${T.RED}; z-index: 5; pointer-events: none;"></div>`
