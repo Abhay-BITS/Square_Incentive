@@ -30,6 +30,9 @@ export async function sendEmail(
   fromEmail?: string,
   fromName?: string
 ): Promise<SendResult> {
+  if ((rm as any).blocks && (rm as any).blocks.length > 0) {
+    return { empCode: rm.empCode, success: false, error: 'Email with PDF not supported for promoted employees yet. Use HTML download.' };
+  }
   try {
     const payload: Record<string, unknown> = {
       Rm: rm,

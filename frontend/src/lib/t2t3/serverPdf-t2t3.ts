@@ -23,6 +23,9 @@ async function post(path: string, body: unknown): Promise<Blob> {
 }
 
 export async function downloadServerPdf(rm: Rm): Promise<void> {
+  if (rm.blocks && rm.blocks.length > 0) {
+    throw new Error('Server PDF not available for promoted employees. Use HTML download instead.');
+  }
   const blob = await post('/api/pdf/single', { rm, tier: 't2t3' });
   saveAs(blob, `${rm.empCode}_${rm.calc.ddShort}DD.pdf`);
 }
@@ -62,11 +65,18 @@ export interface ZipProgress {
 }
 
 export async function downloadServerPdfZip(rms: Rm[], onProgress?: (progress: ZipProgress) => void): Promise<number> {
+  const nonPromo = rms.filter(rm => !rm.blocks || rm.blocks.length === 0);
+  if (nonPromo.length < rms.length) {
+    console.warn(`Skipping ${rms.length - nonPromo.length} promo employee(s) from server PDF — use HTML export for those.`);
+  }
+  if (nonPromo.length === 0) {
+    throw new Error('All selected employees are promoted. Use HTML export instead.');
+  }
   const ts = stamp();
 
-  if (rms.length <= BATCH_SIZE) {
+  if (nonPromo.length <= BATCH_SIZE) {
     onProgress?.({ message: 'Generating PDFs…' });
-    saveAs(await postWithRetry('/api/pdf/zip', { rms, tier: 't2t3' }), `incentive_t2t3_pdfs_${ts}.zip`);
+    saveAs(await postWithRetry('/api/pdf/zip', { rms: nonPromo, tier: 't2t3' }), `incentive_t2t3_pdfs_${ts}.zip`);
     return 1;
   }
 
@@ -85,21 +95,21 @@ export async function downloadServerPdfZip(rms: Rm[], onProgress?: (progress: Zi
   }
 
   try {
-    for (let i = 0; i < rms.length; i += BATCH_SIZE) {
+    for (let i = 0; i < nonPromo.length; i += BATCH_SIZE) {
       const done = i;
       const elapsed = Date.now() - started;
       onProgress?.({
-        message: `Generating ${done} of ${rms.length} PDFs`,
-        percent: Math.round((done / rms.length) * 100),
+        message: `Generating ${done} of ${nonPromo.length} PDFs`,
+        percent: Math.round((done / nonPromo.length) * 100),
         detail: [
           savedParts > 0 ? `${savedParts} ZIP file${savedParts > 1 ? 's' : ''} saved` : '',
-          done > 0 ? formatEta((elapsed / done) * (rms.length - done)) : 'estimating time…',
+          done > 0 ? formatEta((elapsed / done) * (nonPromo.length - done)) : 'estimating time…',
         ]
           .filter(Boolean)
           .join(' · '),
       });
 
-      const batch = await JSZip.loadAsync(await postWithRetry('/api/pdf/zip', { rms: rms.slice(i, i + BATCH_SIZE), tier: 't2t3' }));
+      const batch = await JSZip.loadAsync(await postWithRetry('/api/pdf/zip', { rms: nonPromo.slice(i, i + BATCH_SIZE), tier: 't2t3' }));
       for (const name of Object.keys(batch.files)) {
         const data = await batch.files[name].async('uint8array');
         if (partBytes + data.length > MAX_PART_BYTES) await flush();

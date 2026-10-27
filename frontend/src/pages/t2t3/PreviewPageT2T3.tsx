@@ -66,6 +66,11 @@ export default function PreviewPageT2T3() {
 
   async function downloadServer() {
     if (!activeRm) return;
+    if (activeRm.blocks && activeRm.blocks.length > 0) {
+      downloadHtml(activeRm);
+      toast('Promo employee — downloaded as HTML', 'success');
+      return;
+    }
     setServerBusy(true);
     try {
       await downloadServerPdf(activeRm);
