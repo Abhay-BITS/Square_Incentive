@@ -553,6 +553,81 @@ function validateAndNormalize(rmRows, dlRows) {
 // ---------- Calc ----------
 function _computeBlock(deals, tier, ytdCost) {
   const teamYtdCost = ytdCost || 0;
+  const isT0T1 = tier === 'T0' || tier === 'T1';
+
+  // --- T0/T1 branch: follows engine-t0t1.js rules ---
+  if (isT0T1) {
+    const eligibilityTarget = 5 * teamYtdCost;
+
+    // Team deals excluded from base entirely in T0/T1
+    const selfProvDeals = deals.filter(d => d.selfTeam !== 'Team' && d.stage !== 'Not counted');
+    const selfProvBase = selfProvDeals.reduce((s, d) => s + d.revenue, 0);
+    const provCrossed = selfProvBase >= eligibilityTarget && selfProvBase > 0 && eligibilityTarget > 0;
+    const selfProvIncentive = provCrossed ? 0.05 * eligibilityTarget + 0.40 * (selfProvBase - eligibilityTarget) : 0;
+
+    const selfConfDeals = deals.filter(d => d.selfTeam !== 'Team' && (d.stage === 'Confirmed' || d.stage === 'Collected'));
+    const selfConfBase = selfConfDeals.reduce((s, d) => {
+      if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
+      if (d.isLoggedIn && d.collection === 0) return s;
+      return s + d.revenue;
+    }, 0);
+    const confCrossed = selfConfBase >= eligibilityTarget && selfConfBase > 0 && eligibilityTarget > 0;
+    const selfConfIncentive = confCrossed ? 0.05 * eligibilityTarget + 0.40 * (selfConfBase - eligibilityTarget) : 0;
+
+    const dealResults = deals.map(d => {
+      if (d.stage === 'Not counted') {
+        return { deal: d, provShare: 0, confShare: 0, payable: 0, whichApplies: 'none', calcNote: '', noReason: 'Not counted deal', cashPayable: 0, esopPayable: 0 };
+      }
+      if (d.selfTeam === 'Team') {
+        return { deal: d, provShare: 0, confShare: 0, payable: 0, whichApplies: 'none', calcNote: '', noReason: 'Team deal — no incentive', cashPayable: 0, esopPayable: 0 };
+      }
+      const provShare = selfProvBase > 0 ? selfProvIncentive * (d.revenue / selfProvBase) : 0;
+      const confContrib = (d.isLoggedIn && d.collection > 0) ? d.revenue * (d.collection / 100) : d.revenue;
+      const confShare = (d.stage !== 'Counted' && selfConfBase > 0) ? selfConfIncentive * (confContrib / selfConfBase) : 0;
+      let whichApplies, payable = 0, calcNote = '', noReason = '';
+      if (d.stage === 'Counted') {
+        if (d.type === 'Focus' && selfProvIncentive > 0) { whichApplies = 'provisional'; payable = 0.25 * provShare; calcNote = '25% × ' + fmtINR(provShare); }
+        else if (d.type === 'Non-Focus' && selfProvIncentive > 0) { whichApplies = 'none'; noReason = 'Non-focus project'; }
+        else { whichApplies = 'none'; noReason = 'Below eligibility target'; }
+      } else {
+        if (selfConfIncentive > 0) {
+          const rawPct = d.collection / 100;
+          const pct = (d.isLoggedIn && d.collection > 0) ? 1.0 : Math.max(0.5, rawPct);
+          const confPay = pct * confShare;
+          const advPay = (d.type === 'Focus' && selfProvIncentive > 0) ? 0.25 * provShare : 0;
+          if (advPay > confPay) { whichApplies = 'provisional'; payable = advPay; calcNote = '25% × ' + fmtINR(provShare); }
+          else {
+            whichApplies = 'confirmed'; payable = confPay;
+            calcNote = (d.isLoggedIn && d.collection > 0) ? '100% × ' + fmtINR(confShare) + ' (Logged In)' : fmtPct(pct * 100) + (rawPct < 0.5 ? ' (floor)' : '') + ' × ' + fmtINR(confShare);
+          }
+        } else if (d.type === 'Focus' && selfProvIncentive > 0) { whichApplies = 'provisional'; payable = 0.25 * provShare; calcNote = '25% × ' + fmtINR(provShare); }
+        else if (d.type === 'Non-Focus' && selfProvIncentive > 0) { whichApplies = 'none'; noReason = 'Non-focus project'; }
+        else { whichApplies = 'none'; noReason = 'Below eligibility target'; }
+      }
+      let payableBeforeShare = payable;
+      let shareApplied = false;
+      if (d.sharePct !== undefined && d.sharePct !== null && d.sharePct !== 100 && payable > 0) {
+        payable = payable * (d.sharePct / 100); shareApplied = true; calcNote = calcNote + ' × ' + d.sharePct + '% (share)';
+      }
+      return { deal: d, provShare, confShare, selfShare: Math.max(provShare, confShare), teamShare: 0, payable, payableBeforeShare, shareApplied, whichApplies, calcNote, noReason, cashPayable: 0.80 * payable, esopPayable: 0.20 * payable };
+    });
+
+    const selfPayable = dealResults.filter(dr => dr.deal.selfTeam === 'Self').reduce((s, dr) => s + dr.payable, 0);
+    return {
+      isT0T1: true,
+      teamYtdCost, teamTarget: eligibilityTarget, teamMultiplier: 5,
+      teamBelowPct: 0.05, teamAbovePct: 0.40,
+      selfProvBase, selfProvIncentive, selfConfBase, selfConfIncentive, selfPayable,
+      provCrossed, confCrossed, eligibilityTarget,
+      selfProvDeals, selfConfDeals,
+      teamIncentive: 0, teamConfBase: 0, teamCrossed: false, teamPayable: 0,
+      teamBelowAmt: 0, teamAboveAmt: 0,
+      teamAllBase: 0, teamConfDeals: [],
+      dealResults,
+    };
+  }
+
+  // --- T2/T3 branch: original logic ---
   const isT2 = tier === 'T2';
   const teamMultiplier = isT2 ? 4 : 3;
   const teamBelowPct = isT2 ? 0.03 : 0.015;
@@ -645,6 +720,7 @@ function _computeBlock(deals, tier, ytdCost) {
   const teamPayable = dealResults.filter(dr => dr.deal.selfTeam === 'Team').reduce((s, dr) => s + dr.payable, 0);
 
   return {
+    isT0T1: false,
     teamYtdCost, teamTarget, teamMultiplier, teamBelowPct, teamAbovePct,
     selfProvBase, selfProvIncentive, selfConfBase, selfConfIncentive, selfPayable,
     selfProvDeals, selfConfDeals,
@@ -1108,130 +1184,265 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
 
   const buildPromoBlockCard = (bc, block, bi) => {
     const bTier = bc.tier;
+    const bIsT0T1 = bc.isT0T1;
     const bIsT2 = bTier === 'T2';
-    const bMultLabel = bIsT2 ? 'SMx 4×' : 'SMx 3×';
-    const bMultNum = bIsT2 ? '4' : '3';
+    const bMultLabel = bIsT0T1 ? 'SMx 5×' : (bIsT2 ? 'SMx 4×' : 'SMx 3×');
+    const bMultNum = bIsT0T1 ? '5' : (bIsT2 ? '4' : '3');
     const bRange = fmtBlockDateRange(block);
-    const bTeamDeals = block.deals.filter(d => d.selfTeam === 'Team');
-    const bTeamDR = bc.dealResults.filter(dr => dr.deal.selfTeam === 'Team');
     const bSelfDeals = block.deals.filter(d => d.selfTeam === 'Self');
     const bSelfDR = bc.dealResults.filter(dr => dr.deal.selfTeam === 'Self');
     const blockPay = bc.selfPayable + bc.teamPayable;
 
-    let teamSteps = sectionDivider('SECTION A · TEAM INCENTIVE', T.ORANGE_DEEP);
-    teamSteps += sectionH(nextNo(), 'Team YTD Cost and Eligibility Target') + `<tr><td style="padding: 4px 0 12px 0;">
-      ${bulletList([
-        '<strong>Self+Team YTD Cost</strong> = cumulative salary cost.',
-        '<strong>Eligibility Target</strong> = ' + bMultNum + ' × (Self+Team YTD Cost).',
-        'Revenue must cross this to earn incentive.'
-      ])}
-      <div style="font-family: ${T.MONO}; font-size: 13px; color: ${T.INK}; padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.NAVY}; border-radius: 3px; line-height: 1.7;">
-        Self+Team YTD Cost = <strong style="color: ${T.NAVY};">${fmtINR(bc.teamYtdCost)}</strong><br>
-        Eligibility Target (${bMultLabel}) = ${bMultNum} × ${fmtINR(bc.teamYtdCost)} = <strong style="color: ${T.NAVY};">${fmtINR(bc.teamTarget)}</strong>
-      </div>
-    </td></tr>`;
-    teamSteps += sectionH(nextNo(), 'Team Deals') + `<tr><td style="padding: 4px 0 12px 0;">${buildDealTable(bTeamDeals, 'Team')}</td></tr>`;
-    if (bTeamDeals.length > 0) {
-      const bTCDL = bc.teamConfDeals || bTeamDeals.filter(d => d.stage === 'Confirmed' || d.stage === 'Collected');
-      const crossNote = bc.teamCrossed
-        ? `<strong style="color: ${T.GREEN_DEEP};">Crosses target</strong> by ${fmtINR(bc.teamConfBase - bc.teamTarget)}`
-        : bc.teamConfBase > 0 ? 'Revenue is <strong>below target</strong>.' : 'No confirmed team revenue.';
-      teamSteps += sectionH(nextNo(), 'Confirmed Incentive (Team) Calculation') + `<tr><td style="padding: 4px 0 12px 0;">
-        ${bulletList([
-          '<strong>Confirmed Team Revenue:</strong> ' + (bTCDL.length > 0 ? confSumFormula(bTCDL) + ' = ' + fmtINR(bc.teamConfBase) : '₹0'),
-          '<strong>Eligibility Target (' + bMultLabel + '):</strong> ' + fmtINR(bc.teamTarget),
-          crossNote
-        ])}
-        ${bc.teamTarget > 0 ? slabVisual(bc.teamTarget, bc.teamConfBase, bc.teamIncentive, bc.teamBelowPct, bc.teamAbovePct, 'Confirmed Incentive (Team)', bTier) : ''}
-      </td></tr>`;
-      if (bc.teamIncentive > 0) {
-        teamSteps += sectionH(nextNo(), 'Per-deal payable (Team)') + `<tr><td style="padding: 4px 0 12px 0;">
-          ${buildPerDealTable(bTeamDR, bc.teamIncentive, bc.teamConfBase, 'Team', bc.teamPayable)}
-          ${buildBreakupTable(bTeamDR, bc.teamPayable, 0.80 * bc.teamPayable, 0.20 * bc.teamPayable)}
-        </td></tr>`;
-      }
-    } else {
-      teamSteps += sectionH(nextNo(), 'Confirmed Incentive (Team) Calculation') + `<tr><td style="padding: 4px 0 12px 0;">${bulletList(['No team deals in this block. Confirmed Incentive (Team) = ₹0.'])}</td></tr>`;
-    }
+    let stepsHtml = '';
 
-    let selfSteps = sectionDivider('SECTION B · SELF INCENTIVE', T.ORANGE_DEEP);
-    selfSteps += sectionH(nextNo(), 'Self Deals') + `<tr><td style="padding: 4px 0 12px 0;">${buildDealTable(bSelfDeals, 'Self')}</td></tr>`;
-    if (bSelfDeals.length > 0) {
-      const bSPL = bc.selfProvDeals || bSelfDeals.filter(d => d.stage !== 'Not counted');
-      const bSCL = bc.selfConfDeals || bSelfDeals.filter(d => d.stage === 'Confirmed' || d.stage === 'Collected');
-      const sf = (deals) => deals.map(d => escapeHtml(d.tcfId) + ' (' + fmtL(d.revenue) + ')').join(' + ');
-      selfSteps += sectionH(nextNo(), 'Both Incentives — Provisional and Confirmed (Self)') + `<tr><td style="padding: 4px 0 12px 0;">
+    // --- T0/T1 block: NO team section, slab-based self calc ---
+    if (bIsT0T1) {
+      stepsHtml += sectionH(nextNo(), 'YTD Salary Cost and Eligibility Target') + `<tr><td style="padding: 4px 0 12px 0;">
         ${bulletList([
-          'Two incentives computed: <strong>Provisional</strong> (all Self deals) and <strong>Confirmed</strong> (Confirmed/Collected Self deals).',
-          '<strong>Rule:</strong> 5% × total self deal revenue (flat rate).'
+          '<strong>YTD Salary Cost</strong> = cumulative salary cost for the block period.',
+          '<strong>Eligibility Target</strong> = 5 × YTD Salary Cost. Revenue must cross this to earn incentive.'
         ])}
-        <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 12px 0 6px 0; font-weight: 700;">Provisional Incentive (Self)</p>
-        ${bSPL.length === 0 ? bulletList(['<strong>Provisional Incentive (Self) = ₹0.</strong>'])
-          : bulletList([
-              '<strong>Total Provisional Self Revenue:</strong> ' + sf(bSPL) + ' = ' + fmtINR(bc.selfProvBase),
-              '<strong>Provisional Incentive (Self) = 5% × ' + fmtINR(bc.selfProvBase) + ' = ' + fmtINR(bc.selfProvIncentive) + '</strong>'
-            ])}
-        <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 16px 0 6px 0; font-weight: 700;">Confirmed Incentive (Self)</p>
-        ${bSCL.length === 0 ? bulletList(['No Confirmed/Collected self deals. <strong>Confirmed Incentive (Self) = ₹0.</strong>'])
-          : bulletList([
-              '<strong>Total Confirmed Self Revenue:</strong> ' + confSumFormula(bSCL) + ' = ' + fmtINR(bc.selfConfBase),
-              '<strong>Confirmed Incentive (Self) = 5% × ' + fmtINR(bc.selfConfBase) + ' = ' + fmtINR(bc.selfConfIncentive) + '</strong>'
-            ])}
-      </td></tr>`;
-      if (bc.selfProvIncentive > 0 || bc.selfConfIncentive > 0) {
-        let selfPayRows = '';
-        bSelfDR.forEach(dr => {
-          const d = dr.deal;
-          const stg = d.isLoggedIn ? 'Logged In' : d.stage;
-          const shareTag = d.sharePct !== 100 ? '<br><span style="font-family: ' + T.FONT + '; font-size: 9px; color: ' + T.ORANGE_DEEP + '; font-weight: 700;">Share ' + d.sharePct + '%</span>' : '';
-          let whichCell;
-          if (dr.whichApplies === 'provisional') whichCell = '<strong style="color: ' + T.GREEN_DEEP + ';">Provisional</strong>';
-          else if (dr.whichApplies === 'confirmed') whichCell = '<strong style="color: ' + T.ORANGE_DEEP + ';">Confirmed</strong>';
-          else whichCell = '<strong style="color: ' + T.MUTED + ';">—</strong>' + (dr.noReason ? '<br><span style="font-size: 10px; color: ' + T.MUTED + '; font-style: italic;">' + escapeHtml(dr.noReason) + '</span>' : '');
-          selfPayRows += '<tr>' +
-            '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 10.5px; color: ' + T.INK + ';">' + tcfCell(d) + shareTag + '</td>' +
-            '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 12px; text-align: right; color: ' + T.INK + ';">' + fmtINR(d.revenue) + '</td>' +
-            '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.FONT + '; font-size: 11px; text-align: center; color: ' + T.INK_SOFT + ';">' + stg + '</td>' +
-            '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.FONT + '; font-size: 11px; text-align: center;">' + whichCell + '</td>' +
-            '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 12px; font-weight: 700; text-align: right; color: ' + T.NAVY + ';">' + fmtINR(dr.payable) + '</td>' +
-            '</tr>';
-        });
-        const selfTotalRow = '<tr style="background: ' + T.NAVY_SOFT + ';"><td colspan="4" style="padding: 12px; font-family: ' + T.FONT + '; font-size: 13px; font-weight: 700; color: ' + T.NAVY + ';">Total Self Payable</td><td style="padding: 12px; font-family: ' + T.MONO + '; font-size: 14px; font-weight: 700; color: ' + T.NAVY + '; text-align: right;">' + fmtINR(bc.selfPayable) + '</td></tr>';
-        selfSteps += sectionH(nextNo(), 'Per-deal payable (Self)') + `<tr><td style="padding: 4px 0 12px 0;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; border: 1px solid ${T.BORDER}; border-radius: 6px; overflow: hidden;">
-            <thead><tr style="background: ${T.NAVY};">
-              <th style="padding: 9px 10px; text-align: left; font-size: 10.5px; color: white; font-family: ${T.FONT};">TCF ID</th>
-              <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT};">Revenue</th>
-              <th style="padding: 9px 10px; text-align: center; font-size: 10.5px; color: white; font-family: ${T.FONT};">Stage</th>
-              <th style="padding: 9px 10px; text-align: center; font-size: 10.5px; color: white; font-family: ${T.FONT};">Which Applies</th>
-              <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT};">Payable</th>
-            </tr></thead>
-            <tbody>${selfPayRows}${selfTotalRow}</tbody>
-          </table>
-          ${buildBreakupTable(bSelfDR, bc.selfPayable, 0.80 * bc.selfPayable, 0.20 * bc.selfPayable)}
-        </td></tr>`;
-      }
-    } else {
-      selfSteps += sectionH(nextNo(), 'Both Incentives — Provisional and Confirmed (Self)') + `<tr><td style="padding: 4px 0 12px 0;">${bulletList(['No self deals in this block. Incentive (Self) = ₹0.'])}</td></tr>`;
-    }
-
-    const combinedSteps = sectionDivider('COMBINED · BLOCK TOTAL', T.ORANGE_DEEP) +
-      sectionH(nextNo(), 'Block ' + (bi + 1) + ' Payable') + `<tr><td style="padding: 4px 0 12px 0;">
         <div style="font-family: ${T.MONO}; font-size: 13px; color: ${T.INK}; padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.NAVY}; border-radius: 3px; line-height: 1.7;">
-          Self Payable = <strong>${fmtINR(bc.selfPayable)}</strong><br>
-          Team Payable = <strong>${fmtINR(bc.teamPayable)}</strong><br>
-          <strong>Block ${bi + 1} Total Payable = ${fmtINR(bc.selfPayable)} + ${fmtINR(bc.teamPayable)} = <span style="color: ${T.NAVY};">${fmtINR(blockPay)}</span></strong>
+          YTD Salary Cost = <strong style="color: ${T.NAVY};">${fmtINR(bc.teamYtdCost)}</strong><br>
+          Eligibility Target (${bMultLabel}) = 5 × ${fmtINR(bc.teamYtdCost)} = <strong style="color: ${T.NAVY};">${fmtINR(bc.eligibilityTarget)}</strong>
         </div>
       </td></tr>`;
 
-    const stepsHtml = teamSteps + selfSteps + combinedSteps;
+      // All deals (team deals shown with "no incentive" note)
+      const allDeals = block.deals;
+      stepsHtml += sectionH(nextNo(), 'Deals in this block') + `<tr><td style="padding: 4px 0 12px 0;">${buildDealTable(allDeals, 'All')}</td></tr>`;
+
+      // Provisional + Confirmed incentive (slab-based)
+      if (allDeals.length > 0) {
+        const bSPL = bc.selfProvDeals || bSelfDeals.filter(d => d.stage !== 'Not counted');
+        const bSCL = bc.selfConfDeals || bSelfDeals.filter(d => d.stage === 'Confirmed' || d.stage === 'Collected');
+        const sf = (deals) => deals.map(d => escapeHtml(d.tcfId) + ' (' + fmtL(d.revenue) + ')').join(' + ');
+
+        // Team deals note
+        const teamDeals = block.deals.filter(d => d.selfTeam === 'Team');
+        const teamNote = teamDeals.length > 0 ? '<strong>Note:</strong> Team deals (' + teamDeals.map(d => escapeHtml(d.tcfId)).join(', ') + ') get ₹0 — no incentive on team deals in ' + bTier + '.' : '';
+
+        let provBlock;
+        if (bSPL.length === 0) {
+          provBlock = bulletList(['<strong>Provisional Incentive = ₹0.</strong>']);
+        } else if (bc.selfProvIncentive === 0) {
+          provBlock = bulletList([
+            '<strong>Eligibility Target (' + bMultLabel + '):</strong> ' + fmtINR(bc.eligibilityTarget),
+            '<strong>Total Provisional Revenue:</strong> ' + sf(bSPL) + ' = ' + fmtINR(bc.selfProvBase),
+            '<strong style="color: ' + T.RED_DEEP + ';">Did not cross target</strong> → Provisional Incentive = ₹0.'
+          ]) + slabVisual(bc.eligibilityTarget, bc.selfProvBase, 0, 0.05, 0.40, 'Provisional Incentive', bTier);
+        } else {
+          const crossNote = bc.selfProvBase > bc.eligibilityTarget
+            ? '<strong>Crosses target</strong> by ' + fmtINR(bc.selfProvBase - bc.eligibilityTarget)
+            : '<strong>Exactly at target</strong> — 5% of target applies.';
+          provBlock = bulletList([
+            '<strong>Eligibility Target (' + bMultLabel + '):</strong> ' + fmtINR(bc.eligibilityTarget),
+            '<strong>Total Provisional Revenue:</strong> ' + sf(bSPL) + ' = ' + fmtINR(bc.selfProvBase),
+            crossNote
+          ]) + slabVisual(bc.eligibilityTarget, bc.selfProvBase, bc.selfProvIncentive, 0.05, 0.40, 'Provisional Incentive', bTier);
+        }
+
+        let confBlock;
+        if (bSCL.length === 0) {
+          confBlock = bulletList(['No Confirmed/Collected self deals. <strong>Confirmed Incentive = ₹0.</strong>']);
+        } else if (bc.selfConfIncentive === 0) {
+          confBlock = bulletList([
+            '<strong>Eligibility Target (' + bMultLabel + '):</strong> ' + fmtINR(bc.eligibilityTarget),
+            '<strong>Total Confirmed Revenue:</strong> ' + confSumFormula(bSCL) + ' = ' + fmtINR(bc.selfConfBase),
+            '<strong style="color: ' + T.RED_DEEP + ';">Did not cross target</strong> → Confirmed Incentive = ₹0.'
+          ]) + slabVisual(bc.eligibilityTarget, bc.selfConfBase, 0, 0.05, 0.40, 'Confirmed Incentive', bTier);
+        } else {
+          const crossNote = bc.selfConfBase > bc.eligibilityTarget
+            ? '<strong>Crosses target</strong> by ' + fmtINR(bc.selfConfBase - bc.eligibilityTarget)
+            : '<strong>Exactly at target</strong> — 5% of target applies.';
+          confBlock = bulletList([
+            '<strong>Eligibility Target (' + bMultLabel + '):</strong> ' + fmtINR(bc.eligibilityTarget),
+            '<strong>Total Confirmed Revenue:</strong> ' + confSumFormula(bSCL) + ' = ' + fmtINR(bc.selfConfBase),
+            crossNote
+          ]) + slabVisual(bc.eligibilityTarget, bc.selfConfBase, bc.selfConfIncentive, 0.05, 0.40, 'Confirmed Incentive', bTier);
+        }
+
+        stepsHtml += sectionH(nextNo(), 'Both Incentives — Provisional and Confirmed') + `<tr><td style="padding: 4px 0 12px 0;">
+          ${bulletList([
+            'Two incentives computed: <strong>Provisional</strong> (all Self deals excl. Not counted) and <strong>Confirmed</strong> (Confirmed/Collected Self deals).',
+            '<strong>Rule:</strong> 5% × Eligibility Target + 40% × (Revenue − Eligibility Target). Must cross target first.'
+          ])}
+          ${teamNote ? '<p style="font-family: ' + T.FONT + '; font-size: 12px; color: ' + T.MUTED + '; margin: 8px 0;">' + teamNote + '</p>' : ''}
+          <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 12px 0 6px 0; font-weight: 700;">Provisional Incentive</p>
+          ${provBlock}
+          <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 16px 0 6px 0; font-weight: 700;">Confirmed Incentive</p>
+          ${confBlock}
+        </td></tr>`;
+
+        if (bc.selfProvIncentive > 0 || bc.selfConfIncentive > 0) {
+          let selfPayRows = '';
+          bSelfDR.forEach(dr => {
+            const d = dr.deal;
+            const stg = d.isLoggedIn ? 'Logged In' : d.stage;
+            const shareTag = d.sharePct !== 100 ? '<br><span style="font-family: ' + T.FONT + '; font-size: 9px; color: ' + T.ORANGE_DEEP + '; font-weight: 700;">Share ' + d.sharePct + '%</span>' : '';
+            let whichCell;
+            if (dr.whichApplies === 'provisional') whichCell = '<strong style="color: ' + T.GREEN_DEEP + ';">Provisional</strong>';
+            else if (dr.whichApplies === 'confirmed') whichCell = '<strong style="color: ' + T.ORANGE_DEEP + ';">Confirmed</strong>';
+            else whichCell = '<strong style="color: ' + T.MUTED + ';">—</strong>' + (dr.noReason ? '<br><span style="font-size: 10px; color: ' + T.MUTED + '; font-style: italic;">' + escapeHtml(dr.noReason) + '</span>' : '');
+            selfPayRows += '<tr>' +
+              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 10.5px; color: ' + T.INK + ';">' + tcfCell(d) + shareTag + '</td>' +
+              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 12px; text-align: right; color: ' + T.INK + ';">' + fmtINR(d.revenue) + '</td>' +
+              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.FONT + '; font-size: 11px; text-align: center; color: ' + T.INK_SOFT + ';">' + stg + '</td>' +
+              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.FONT + '; font-size: 11px; text-align: center;">' + whichCell + '</td>' +
+              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 12px; font-weight: 700; text-align: right; color: ' + T.NAVY + ';">' + fmtINR(dr.payable) + '</td>' +
+              '</tr>';
+          });
+          const selfTotalRow = '<tr style="background: ' + T.NAVY_SOFT + ';"><td colspan="4" style="padding: 12px; font-family: ' + T.FONT + '; font-size: 13px; font-weight: 700; color: ' + T.NAVY + ';">Total Self Payable</td><td style="padding: 12px; font-family: ' + T.MONO + '; font-size: 14px; font-weight: 700; color: ' + T.NAVY + '; text-align: right;">' + fmtINR(bc.selfPayable) + '</td></tr>';
+          stepsHtml += sectionH(nextNo(), 'Per-deal payable') + `<tr><td style="padding: 4px 0 12px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; border: 1px solid ${T.BORDER}; border-radius: 6px; overflow: hidden;">
+              <thead><tr style="background: ${T.NAVY};">
+                <th style="padding: 9px 10px; text-align: left; font-size: 10.5px; color: white; font-family: ${T.FONT};">TCF ID</th>
+                <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT};">Revenue</th>
+                <th style="padding: 9px 10px; text-align: center; font-size: 10.5px; color: white; font-family: ${T.FONT};">Stage</th>
+                <th style="padding: 9px 10px; text-align: center; font-size: 10.5px; color: white; font-family: ${T.FONT};">Which Applies</th>
+                <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT};">Payable</th>
+              </tr></thead>
+              <tbody>${selfPayRows}${selfTotalRow}</tbody>
+            </table>
+            ${buildBreakupTable(bSelfDR, bc.selfPayable, 0.80 * bc.selfPayable, 0.20 * bc.selfPayable)}
+          </td></tr>`;
+        }
+      } else {
+        stepsHtml += sectionH(nextNo(), 'Both Incentives — Provisional and Confirmed') + `<tr><td style="padding: 4px 0 12px 0;">${bulletList(['No deals in this block. Incentive = ₹0.'])}</td></tr>`;
+      }
+
+      // Block total (T0/T1: self only, no team line)
+      stepsHtml += sectionH(nextNo(), 'Block ' + (bi + 1) + ' Payable') + `<tr><td style="padding: 4px 0 12px 0;">
+        <div style="font-family: ${T.MONO}; font-size: 13px; color: ${T.INK}; padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.NAVY}; border-radius: 3px; line-height: 1.7;">
+          <strong>Block ${bi + 1} Total Payable = <span style="color: ${T.NAVY};">${fmtINR(blockPay)}</span></strong>
+        </div>
+      </td></tr>`;
+
+    } else {
+      // --- T2/T3 block: original logic with team + self sections ---
+      const bTeamDeals = block.deals.filter(d => d.selfTeam === 'Team');
+      const bTeamDR = bc.dealResults.filter(dr => dr.deal.selfTeam === 'Team');
+
+      let teamSteps = sectionDivider('SECTION A · TEAM INCENTIVE', T.ORANGE_DEEP);
+      teamSteps += sectionH(nextNo(), 'Team YTD Cost and Eligibility Target') + `<tr><td style="padding: 4px 0 12px 0;">
+        ${bulletList([
+          '<strong>Self+Team YTD Cost</strong> = cumulative salary cost.',
+          '<strong>Eligibility Target</strong> = ' + bMultNum + ' × (Self+Team YTD Cost).',
+          'Revenue must cross this to earn incentive.'
+        ])}
+        <div style="font-family: ${T.MONO}; font-size: 13px; color: ${T.INK}; padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.NAVY}; border-radius: 3px; line-height: 1.7;">
+          Self+Team YTD Cost = <strong style="color: ${T.NAVY};">${fmtINR(bc.teamYtdCost)}</strong><br>
+          Eligibility Target (${bMultLabel}) = ${bMultNum} × ${fmtINR(bc.teamYtdCost)} = <strong style="color: ${T.NAVY};">${fmtINR(bc.teamTarget)}</strong>
+        </div>
+      </td></tr>`;
+      teamSteps += sectionH(nextNo(), 'Team Deals') + `<tr><td style="padding: 4px 0 12px 0;">${buildDealTable(bTeamDeals, 'Team')}</td></tr>`;
+      if (bTeamDeals.length > 0) {
+        const bTCDL = bc.teamConfDeals || bTeamDeals.filter(d => d.stage === 'Confirmed' || d.stage === 'Collected');
+        const crossNote = bc.teamCrossed
+          ? `<strong style="color: ${T.GREEN_DEEP};">Crosses target</strong> by ${fmtINR(bc.teamConfBase - bc.teamTarget)}`
+          : bc.teamConfBase > 0 ? 'Revenue is <strong>below target</strong>.' : 'No confirmed team revenue.';
+        teamSteps += sectionH(nextNo(), 'Confirmed Incentive (Team) Calculation') + `<tr><td style="padding: 4px 0 12px 0;">
+          ${bulletList([
+            '<strong>Confirmed Team Revenue:</strong> ' + (bTCDL.length > 0 ? confSumFormula(bTCDL) + ' = ' + fmtINR(bc.teamConfBase) : '₹0'),
+            '<strong>Eligibility Target (' + bMultLabel + '):</strong> ' + fmtINR(bc.teamTarget),
+            crossNote
+          ])}
+          ${bc.teamTarget > 0 ? slabVisual(bc.teamTarget, bc.teamConfBase, bc.teamIncentive, bc.teamBelowPct, bc.teamAbovePct, 'Confirmed Incentive (Team)', bTier) : ''}
+        </td></tr>`;
+        if (bc.teamIncentive > 0) {
+          teamSteps += sectionH(nextNo(), 'Per-deal payable (Team)') + `<tr><td style="padding: 4px 0 12px 0;">
+            ${buildPerDealTable(bTeamDR, bc.teamIncentive, bc.teamConfBase, 'Team', bc.teamPayable)}
+            ${buildBreakupTable(bTeamDR, bc.teamPayable, 0.80 * bc.teamPayable, 0.20 * bc.teamPayable)}
+          </td></tr>`;
+        }
+      } else {
+        teamSteps += sectionH(nextNo(), 'Confirmed Incentive (Team) Calculation') + `<tr><td style="padding: 4px 0 12px 0;">${bulletList(['No team deals in this block. Confirmed Incentive (Team) = ₹0.'])}</td></tr>`;
+      }
+
+      let selfSteps = sectionDivider('SECTION B · SELF INCENTIVE', T.ORANGE_DEEP);
+      selfSteps += sectionH(nextNo(), 'Self Deals') + `<tr><td style="padding: 4px 0 12px 0;">${buildDealTable(bSelfDeals, 'Self')}</td></tr>`;
+      if (bSelfDeals.length > 0) {
+        const bSPL = bc.selfProvDeals || bSelfDeals.filter(d => d.stage !== 'Not counted');
+        const bSCL = bc.selfConfDeals || bSelfDeals.filter(d => d.stage === 'Confirmed' || d.stage === 'Collected');
+        const sf = (deals) => deals.map(d => escapeHtml(d.tcfId) + ' (' + fmtL(d.revenue) + ')').join(' + ');
+        selfSteps += sectionH(nextNo(), 'Both Incentives — Provisional and Confirmed (Self)') + `<tr><td style="padding: 4px 0 12px 0;">
+          ${bulletList([
+            'Two incentives computed: <strong>Provisional</strong> (all Self deals) and <strong>Confirmed</strong> (Confirmed/Collected Self deals).',
+            '<strong>Rule:</strong> 5% × total self deal revenue (flat rate).'
+          ])}
+          <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 12px 0 6px 0; font-weight: 700;">Provisional Incentive (Self)</p>
+          ${bSPL.length === 0 ? bulletList(['<strong>Provisional Incentive (Self) = ₹0.</strong>'])
+            : bulletList([
+                '<strong>Total Provisional Self Revenue:</strong> ' + sf(bSPL) + ' = ' + fmtINR(bc.selfProvBase),
+                '<strong>Provisional Incentive (Self) = 5% × ' + fmtINR(bc.selfProvBase) + ' = ' + fmtINR(bc.selfProvIncentive) + '</strong>'
+              ])}
+          <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 16px 0 6px 0; font-weight: 700;">Confirmed Incentive (Self)</p>
+          ${bSCL.length === 0 ? bulletList(['No Confirmed/Collected self deals. <strong>Confirmed Incentive (Self) = ₹0.</strong>'])
+            : bulletList([
+                '<strong>Total Confirmed Self Revenue:</strong> ' + confSumFormula(bSCL) + ' = ' + fmtINR(bc.selfConfBase),
+                '<strong>Confirmed Incentive (Self) = 5% × ' + fmtINR(bc.selfConfBase) + ' = ' + fmtINR(bc.selfConfIncentive) + '</strong>'
+              ])}
+        </td></tr>`;
+        if (bc.selfProvIncentive > 0 || bc.selfConfIncentive > 0) {
+          let selfPayRows = '';
+          bSelfDR.forEach(dr => {
+            const d = dr.deal;
+            const stg = d.isLoggedIn ? 'Logged In' : d.stage;
+            const shareTag = d.sharePct !== 100 ? '<br><span style="font-family: ' + T.FONT + '; font-size: 9px; color: ' + T.ORANGE_DEEP + '; font-weight: 700;">Share ' + d.sharePct + '%</span>' : '';
+            let whichCell;
+            if (dr.whichApplies === 'provisional') whichCell = '<strong style="color: ' + T.GREEN_DEEP + ';">Provisional</strong>';
+            else if (dr.whichApplies === 'confirmed') whichCell = '<strong style="color: ' + T.ORANGE_DEEP + ';">Confirmed</strong>';
+            else whichCell = '<strong style="color: ' + T.MUTED + ';">—</strong>' + (dr.noReason ? '<br><span style="font-size: 10px; color: ' + T.MUTED + '; font-style: italic;">' + escapeHtml(dr.noReason) + '</span>' : '');
+            selfPayRows += '<tr>' +
+              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 10.5px; color: ' + T.INK + ';">' + tcfCell(d) + shareTag + '</td>' +
+              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 12px; text-align: right; color: ' + T.INK + ';">' + fmtINR(d.revenue) + '</td>' +
+              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.FONT + '; font-size: 11px; text-align: center; color: ' + T.INK_SOFT + ';">' + stg + '</td>' +
+              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.FONT + '; font-size: 11px; text-align: center;">' + whichCell + '</td>' +
+              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 12px; font-weight: 700; text-align: right; color: ' + T.NAVY + ';">' + fmtINR(dr.payable) + '</td>' +
+              '</tr>';
+          });
+          const selfTotalRow = '<tr style="background: ' + T.NAVY_SOFT + ';"><td colspan="4" style="padding: 12px; font-family: ' + T.FONT + '; font-size: 13px; font-weight: 700; color: ' + T.NAVY + ';">Total Self Payable</td><td style="padding: 12px; font-family: ' + T.MONO + '; font-size: 14px; font-weight: 700; color: ' + T.NAVY + '; text-align: right;">' + fmtINR(bc.selfPayable) + '</td></tr>';
+          selfSteps += sectionH(nextNo(), 'Per-deal payable (Self)') + `<tr><td style="padding: 4px 0 12px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; border: 1px solid ${T.BORDER}; border-radius: 6px; overflow: hidden;">
+              <thead><tr style="background: ${T.NAVY};">
+                <th style="padding: 9px 10px; text-align: left; font-size: 10.5px; color: white; font-family: ${T.FONT};">TCF ID</th>
+                <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT};">Revenue</th>
+                <th style="padding: 9px 10px; text-align: center; font-size: 10.5px; color: white; font-family: ${T.FONT};">Stage</th>
+                <th style="padding: 9px 10px; text-align: center; font-size: 10.5px; color: white; font-family: ${T.FONT};">Which Applies</th>
+                <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT};">Payable</th>
+              </tr></thead>
+              <tbody>${selfPayRows}${selfTotalRow}</tbody>
+            </table>
+            ${buildBreakupTable(bSelfDR, bc.selfPayable, 0.80 * bc.selfPayable, 0.20 * bc.selfPayable)}
+          </td></tr>`;
+        }
+      } else {
+        selfSteps += sectionH(nextNo(), 'Both Incentives — Provisional and Confirmed (Self)') + `<tr><td style="padding: 4px 0 12px 0;">${bulletList(['No self deals in this block. Incentive (Self) = ₹0.'])}</td></tr>`;
+      }
+
+      const combinedSteps = sectionDivider('COMBINED · BLOCK TOTAL', T.ORANGE_DEEP) +
+        sectionH(nextNo(), 'Block ' + (bi + 1) + ' Payable') + `<tr><td style="padding: 4px 0 12px 0;">
+          <div style="font-family: ${T.MONO}; font-size: 13px; color: ${T.INK}; padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.NAVY}; border-radius: 3px; line-height: 1.7;">
+            Self Payable = <strong>${fmtINR(bc.selfPayable)}</strong><br>
+            Team Payable = <strong>${fmtINR(bc.teamPayable)}</strong><br>
+            <strong>Block ${bi + 1} Total Payable = ${fmtINR(bc.selfPayable)} + ${fmtINR(bc.teamPayable)} = <span style="color: ${T.NAVY};">${fmtINR(blockPay)}</span></strong>
+          </div>
+        </td></tr>`;
+
+      stepsHtml = teamSteps + selfSteps + combinedSteps;
+    }
+
+    const headerNote = bIsT0T1
+      ? 'Deals from <strong>' + bRange + '</strong> considered. Calculation uses ' + bTier + ' rules (5× eligibility target).'
+      : 'Deals from <strong>' + bRange + '</strong> considered. Calculation uses ' + bTier + ' rules (' + bMultNum + '× team target).';
+
     return `
         <tr><td style="padding: 18px 28px 0 28px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: separate; border: 2px solid ${T.NAVY}; border-radius: 8px; overflow: hidden;">
             <tr>
               <td style="padding: 16px 20px; background: ${T.NAVY_SOFT}; border-bottom: 2px solid ${T.NAVY};">
                 <div style="font-family: ${T.FONT}; font-size: 17px; font-weight: 700; color: ${T.NAVY}; line-height: 1.25;">Block ${bi + 1} · ${bTier} · ${bRange}</div>
-                <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 6px 0 0 0;">Deals from <strong>${bRange}</strong> considered. Calculation uses ${bTier} rules (${bMultNum}× team target).</p>
+                <p style="font-family: ${T.FONT}; font-size: 13px; color: ${T.INK}; line-height: 1.55; margin: 6px 0 0 0;">${headerNote}</p>
               </td>
             </tr>
             <tr><td style="padding: 20px 22px; background: white;">
@@ -1250,15 +1461,18 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   // =====================================
   // SECTION A: TEAM INCENTIVE (Steps 1-4)
   // =====================================
-  const teamDeals = !isPromo ? rm.deals.filter(d => d.selfTeam === 'Team') : [];
-  const teamDealResults = !isPromo ? c.dealResults.filter(dr => dr.deal.selfTeam === 'Team') : [];
+  // For promo RMs, steps are generated inside buildPromoBlockCard; skip here.
+  let step1Html = '', step2Html = '', step3Html = '', step5Html = '', step6Html = '', step7Html = '';
+  if (!isPromo) {
+  const teamDeals = rm.deals.filter(d => d.selfTeam === 'Team');
+  const teamDealResults = c.dealResults.filter(dr => dr.deal.selfTeam === 'Team');
   const multiplierLabel = rm.tier === 'T2' ? 'SMx 4×' : 'SMx 3×';
   const multiplierNum = rm.tier === 'T2' ? '4' : '3';
-  const belowLabel = !isPromo ? (c.teamBelowPct * 100) + '%' : '';
-  const aboveLabel = !isPromo ? (c.teamAbovePct * 100) + '%' : '';
+  const belowLabel = (c.teamBelowPct * 100) + '%';
+  const aboveLabel = (c.teamAbovePct * 100) + '%';
 
   // STEP 1: Team YTD Cost + Target
-  const step1Html = sectionH(nextNo(), 'Team YTD Cost and Eligibility Target') + `<tr><td style="padding: 4px 0 12px 0;">
+  step1Html = sectionH(nextNo(), 'Team YTD Cost and Eligibility Target') + `<tr><td style="padding: 4px 0 12px 0;">
     ${bulletList([
       `<strong>Self+Team YTD Cost</strong> = your team's cumulative salary cost (including your own).`,
       `<strong>Eligibility Target</strong> = ${multiplierNum} × (Self+Team YTD Cost).`,
@@ -1271,13 +1485,12 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   </td></tr>`;
 
   // STEP 2: Team Deals
-  const step2Html = sectionH(nextNo(), 'Team Deals') + `<tr><td style="padding: 4px 0 12px 0;">
+  step2Html = sectionH(nextNo(), 'Team Deals') + `<tr><td style="padding: 4px 0 12px 0;">
     ${buildDealTable(teamDeals, 'Team')}
   </td></tr>`;
 
   // STEP 3: Team Incentive Calculation + Slab Visual
   // STEP 4: Per-deal payable (Team) — conditional
-  let step3Html = '';
   if (teamDeals.length > 0) {
     const teamConfDealsList = c.teamConfDeals || teamDeals.filter(d => d.stage === 'Confirmed' || d.stage === 'Collected');
     const crossNote = c.teamCrossed && Math.abs(c.teamConfBase - c.teamTarget) < 0.5
@@ -1321,13 +1534,12 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   const selfDealResults = c.dealResults.filter(dr => dr.deal.selfTeam === 'Self');
 
   // STEP 5: Self Deals
-  const step5Html = sectionH(nextNo(), 'Self Deals') + `<tr><td style="padding: 4px 0 12px 0;">
+  step5Html = sectionH(nextNo(), 'Self Deals') + `<tr><td style="padding: 4px 0 12px 0;">
     ${buildDealTable(selfDeals, 'Self')}
   </td></tr>`;
 
   // STEP 6: Self Incentive Calculation (Provisional + Confirmed)
   // STEP 7: Per-deal payable (Self) — conditional
-  let step6Html = '';
   if (selfDeals.length > 0) {
     const selfProvDealsList = c.selfProvDeals || selfDeals.filter(d => d.stage !== 'Not counted');
     const selfConfDealsList = c.selfConfDeals || selfDeals.filter(d => d.stage === 'Confirmed' || d.stage === 'Collected');
@@ -1465,13 +1677,22 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
   // =====================================
 
   // STEP 7: Combined FY Payable
-  const step7Html = sectionH(nextNo(), 'Combined ' + c.fy.fyLabel + ' Payable') + `<tr><td style="padding: 4px 0 12px 0;">
+  step7Html = sectionH(nextNo(), 'Combined ' + c.fy.fyLabel + ' Payable') + `<tr><td style="padding: 4px 0 12px 0;">
     <div style="font-family: ${T.MONO}; font-size: 13px; color: ${T.INK}; padding: 12px 14px; background: ${T.NAVY_SOFT}; border-left: 3px solid ${T.NAVY}; border-radius: 3px; line-height: 1.7;">
       Self Payable = <strong>${fmtINR(c.selfPayable)}</strong><br>
       Team Payable = <strong>${fmtINR(c.teamPayable)}</strong><br>
       <strong>${c.fy.fyLabel} Total Payable (Self + Team) = ${fmtINR(c.selfPayable)} + ${fmtINR(c.teamPayable)} = <span style="color: ${T.NAVY};">${fmtINR(c.fyPayable)}</span></strong>
     </div>
   </td></tr>`;
+  } // end if (!isPromo)
+
+  // Pre-generate promo block cards so their nextNo() calls happen before step 8/9/10
+  let preBuiltBlockCardsHtml = '';
+  if (isPromo && c.blockCalcs) {
+    c.blockCalcs.forEach((bc, bi) => {
+      preBuiltBlockCardsHtml += buildPromoBlockCard(bc, rm.blocks[bi], bi);
+    });
+  }
 
   // STEP 8: Due Incentive
   const dueColor = c.due < 0 ? T.RED_DEEP : (c.due > 0 ? T.GREEN_DEEP : T.INK);
@@ -1629,11 +1850,8 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           </table>
         </td></tr>`;
   } else if (isPromo && c.blockCalcs) {
-    // PROMO: render per-block cards + combined FY summary
-    let blockCardsHtml = '';
-    c.blockCalcs.forEach((bc, bi) => {
-      blockCardsHtml += buildPromoBlockCard(bc, rm.blocks[bi], bi);
-    });
+    // PROMO: use pre-built block cards + combined FY summary
+    const blockCardsHtml = preBuiltBlockCardsHtml;
     const blockSummaryParts = c.blockCalcs.map((bc, bi) => {
       const bp = bc.selfPayable + bc.teamPayable;
       return `Block ${bi + 1} (${bc.tier}) = <strong>${fmtINR(bp)}</strong>`;
