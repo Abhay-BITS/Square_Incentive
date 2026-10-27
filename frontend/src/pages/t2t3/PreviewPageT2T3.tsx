@@ -30,7 +30,7 @@ export default function PreviewPageT2T3() {
   const { rms, activeRmId, setActiveRmId, toast } = useAppT2T3();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('all');
-  const [tierFilter, setTierFilter] = useState<'all' | 'T2' | 'T3'>('all');
+  const [tierFilter, setTierFilter] = useState<'all' | 'T2' | 'T3' | 'Promo'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [serverBusy, setServerBusy] = useState(false);
 
@@ -40,7 +40,11 @@ export default function PreviewPageT2T3() {
 
   const filteredRms = useMemo(() => {
     return rms.filter((rm) => {
-      if (tierFilter !== 'all' && rm.tier !== tierFilter) return false;
+      if (tierFilter === 'Promo') {
+        if (!rm.blocks || rm.blocks.length === 0) return false;
+      } else if (tierFilter !== 'all') {
+        if (rm.tier !== tierFilter) return false;
+      }
       if (filter !== 'all') {
         const sc = rm.calc.overallScenario;
         if (filter === 'positive' && sc !== 'positive') return false;
@@ -101,7 +105,7 @@ export default function PreviewPageT2T3() {
                onChange={(e) => setSearchQuery(e.target.value)}
              />
              <div className="rep-filters" style={{ marginBottom: 4 }}>
-               {(['all', 'T2', 'T3'] as const).map((t) => (
+               {(['all', 'T2', 'T3', 'Promo'] as const).map((t) => (
                  <button key={t} className={'rep-filter' + (tierFilter === t ? ' active' : '')} onClick={() => setTierFilter(t)}>
                    {t === 'all' ? 'All Tiers' : t}
                  </button>
@@ -141,6 +145,9 @@ export default function PreviewPageT2T3() {
                      <div className="rep-item-row2">
                        <span className="rep-item-id">
                          {rm.empCode || rm.id} · {rm.tier}
+                         {rm.blocks && rm.blocks.length > 0 && (
+                           <span style={{ marginLeft: 6, background: '#7C3AED', color: '#fff', fontSize: 10, padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>Promo</span>
+                         )}
                        </span>
                        <span className={'rep-item-scenario ' + scMap.cls}>{scMap.label}</span>
                      </div>

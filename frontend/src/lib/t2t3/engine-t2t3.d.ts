@@ -19,6 +19,7 @@ export interface Issue {
 export interface Deal {
   tcfId: string;
   tcfLinkId: string | null;
+  dealCategory: 'TCF' | 'MCF' | 'PNLSHARE';
   projectName: string;
   revenue: number;
   month: string;
@@ -28,6 +29,34 @@ export interface Deal {
   selfTeam: 'Self' | 'Team';
   sharePct: number;
   isLoggedIn?: boolean;
+}
+
+export interface RmBlock {
+  tier: string;
+  startDate: Date | null;
+  endDate: Date | null;
+  ytdCost: number;
+  deals: Deal[];
+}
+
+export interface BlockCalc {
+  tier: string;
+  teamYtdCost: number;
+  teamTarget: number;
+  teamMultiplier: number;
+  teamBelowPct: number;
+  teamAbovePct: number;
+  teamCrossed: boolean;
+  teamIncentive: number;
+  teamBelowAmt: number;
+  teamAboveAmt: number;
+  teamPayable: number;
+  selfProvBase: number;
+  selfProvIncentive: number;
+  selfConfBase: number;
+  selfConfIncentive: number;
+  selfPayable: number;
+  dealResults: DealResult[];
 }
 
 export interface Rm {
@@ -50,6 +79,7 @@ export interface Rm {
   doj: string;
   deals: Deal[];
   calc: Calc;
+  blocks?: RmBlock[];
 }
 
 export interface DealResult {
@@ -115,4 +145,5 @@ export interface Calc {
   ddShort: string;
   coverage: { startLabel: string; endLabel: string; rangeLabel: string } | null;
   fy: { fyStartYear: number; fyLabel: string; fyFull: string; fyAprilLabel: string };
+  blockCalcs?: BlockCalc[];
 }
