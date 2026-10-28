@@ -1262,8 +1262,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
 
         stepsHtml += sectionH(nextNo(), 'Both Incentives — Provisional and Confirmed') + `<tr><td style="padding: 4px 0 12px 0;">
           ${bulletList([
-            'Two incentives computed: <strong>Provisional</strong> (all Self deals excl. Not counted) and <strong>Confirmed</strong> (Confirmed/Collected Self deals).',
-            '<strong>Rule:</strong> 5% × Eligibility Target + 40% × (Revenue − Eligibility Target). Must cross target first.'
+            'Two incentives are computed side by side: <strong>Provisional</strong> (all Self deals excl. Not counted) and <strong>Confirmed</strong> (Confirmed, Collected and Logged In Self deals).'
           ])}
           ${teamNote ? '<p style="font-family: ' + T.FONT + '; font-size: 12px; color: ' + T.MUTED + '; margin: 8px 0;">' + teamNote + '</p>' : ''}
           <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 12px 0 6px 0; font-weight: 700;">Provisional Incentive</p>
