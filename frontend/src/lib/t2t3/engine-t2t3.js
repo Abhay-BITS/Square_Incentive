@@ -1044,12 +1044,15 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       const stgFg = d.isLoggedIn ? '#1E40AF' : d.stage === 'Collected' ? T.GREEN_DEEP : d.stage === 'Confirmed' ? T.ORANGE_DEEP : d.stage === 'Not counted' ? T.RED_DEEP : T.INK_SOFT;
       const typBg = d.type === 'Focus' ? T.GREEN_SOFT : T.RED_SOFT;
       const typFg = d.type === 'Focus' ? T.GREEN_DEEP : T.RED_DEEP;
+      const stBg = d.selfTeam === 'Self' ? '#DBEAFE' : '#FEF3C7';
+      const stFg = d.selfTeam === 'Self' ? '#1E40AF' : T.ORANGE_DEEP;
       rows += `<tr>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.MONO}; font-size: 11.5px; color: ${T.INK};">${tcfCell(d)}</td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.MONO}; font-size: 12px; text-align: right; color: ${T.INK};">${fmtINR(d.revenue)}</td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.FONT}; font-size: 12px; text-align: center; color: ${T.INK_SOFT};">${d.month || '-'}</td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; text-align: center;"><span style="background: ${stgBg}; color: ${stgFg}; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">${stageLabel}</span></td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; text-align: center;"><span style="background: ${typBg}; color: ${typFg}; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">${d.type}</span></td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; text-align: center;"><span style="background: ${stBg}; color: ${stFg}; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">${d.selfTeam}</span></td>
         <td style="padding: 8px 10px; border-bottom: 1px solid ${T.BORDER}; font-family: ${T.MONO}; font-size: 12px; text-align: right; color: ${T.INK};">${d.collection !== null ? fmtPct(d.collection) : '-'}</td>
       </tr>`;
     });
@@ -1062,6 +1065,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
           <th style="padding: 9px 10px; text-align: center; font-size: 11px; color: white; font-family: ${T.FONT};">Deal Month</th>
           <th style="padding: 9px 10px; text-align: center; font-size: 11px; color: white; font-family: ${T.FONT};">Stage</th>
           <th style="padding: 9px 10px; text-align: center; font-size: 11px; color: white; font-family: ${T.FONT};">Project Type</th>
+          <th style="padding: 9px 10px; text-align: center; font-size: 11px; color: white; font-family: ${T.FONT};">Self/Team</th>
           <th style="padding: 9px 10px; text-align: right; font-size: 11px; color: white; font-family: ${T.FONT};">Collection %</th>
         </tr></thead>
         <tbody>${rows}</tbody>
