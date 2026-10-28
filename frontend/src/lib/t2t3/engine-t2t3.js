@@ -1273,32 +1273,122 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
         </td></tr>`;
 
         if (bc.selfProvIncentive > 0 || bc.selfConfIncentive > 0) {
+          const _shareCellHtml = (inc, share, dealRev, base, applies) => {
+            if (share <= 0 || base <= 0) return '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; text-align: right; color: ' + T.MUTED + '; font-size: 14px;">-</td>';
+            const bgCol = applies ? '#ECFDF5' : 'transparent';
+            const borderLeft = applies ? 'border-left: 3px solid ' + T.GREEN + ';' : '';
+            const resultCol = applies ? T.GREEN_DEEP : T.NAVY;
+            return '<td style="padding: 10px 12px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; background: ' + bgCol + '; ' + borderLeft + '">' +
+              '<div style="font-family: ' + T.MONO + '; font-size: 10px; color: ' + T.MUTED + '; text-align: right; line-height: 1.3;">' + fmtINR(inc) + ' × (' + fmtL(dealRev) + ' ÷ ' + fmtL(base) + ')</div>' +
+              '<div style="font-family: ' + T.MONO + '; font-size: 13.5px; font-weight: 700; color: ' + resultCol + '; text-align: right; margin-top: 3px;">= ' + fmtINR(share) + '</div>' +
+            '</td>';
+          };
+
+          const _provFlow = buildFlowDiagram(bc.selfProvIncentive, 'Provisional Incentive');
+          const _confFlow = buildFlowDiagram(bc.selfConfIncentive, 'Confirmed Incentive');
+
+          let _provPayBlock = '';
+          if (bc.selfProvIncentive > 0) {
+            _provPayBlock = `
+              <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 16px 0 6px 0; font-weight: 700;">Provisional flow</p>
+              ${_provFlow}
+              ${formulaCard('PROVISIONAL PAYABLE FORMULA', [
+                'Deal Incentive Share = Provisional Incentive × (Deal Revenue ÷ Total Provisional Revenue)',
+                '',
+                '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
+                '<span style="display: inline-block; width: 19ch;">For Focus deal</span>→ Provisional Payable = <span style="color: #FDB744;">25%</span> × Deal Incentive Share',
+                '<span style="display: inline-block; width: 19ch;">For Non-Focus deal</span>→ Provisional Payable = <span style="color: #FDB744;">₹0</span>'
+              ])}`;
+          }
+
+          let _confPayBlock = '';
+          if (bc.selfConfIncentive > 0) {
+            _confPayBlock = `
+              <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 20px 0 6px 0; font-weight: 700;">Confirmed flow</p>
+              ${_confFlow}
+              ${formulaCard('CONFIRMED PAYABLE FORMULA', [
+                'Deal Incentive Share = Confirmed Incentive × (Deal Revenue ÷ Total Confirmed Revenue)',
+                '',
+                '<span style="color: rgba(255,255,255,0.7);">Then per-deal:</span>',
+                '<span style="color: #FDB744;">Payout will be based on whichever is higher: 50% or actual collection.</span>'
+              ])}`;
+          }
+
+          const allBlockDR = bc.dealResults;
           let selfPayRows = '';
-          bSelfDR.forEach(dr => {
+          allBlockDR.forEach(dr => {
             const d = dr.deal;
-            const stg = d.isLoggedIn ? 'Logged In' : d.stage;
             const shareTag = d.sharePct !== 100 ? '<br><span style="font-family: ' + T.FONT + '; font-size: 9px; color: ' + T.ORANGE_DEEP + '; font-weight: 700;">Share ' + d.sharePct + '%</span>' : '';
+            if (d.stage === 'Not counted') {
+              selfPayRows += '<tr>' +
+                '<td style="padding: 10px 8px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.MONO + '; font-size: 10px; color: ' + T.INK + ';">' + tcfCell(d, { withProject: true }) + shareTag + '</td>' +
+                '<td style="padding: 10px 8px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.MONO + '; font-size: 10.5px; text-align: right; color: ' + T.INK + '; white-space: nowrap;">' + fmtINR(d.revenue) + '</td>' +
+                '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle;"><span style="background: ' + T.RED_SOFT + '; color: ' + T.RED_DEEP + '; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">Not counted</span></td>' +
+                '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; text-align: right; color: ' + T.MUTED + '; font-size: 14px;">-</td>' +
+                '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; text-align: right; color: ' + T.MUTED + '; font-size: 14px;">-</td>' +
+                '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.FONT + '; font-size: 10.5px; text-align: center; line-height: 1.35;"><strong style="color: ' + T.MUTED + ';">No incentive</strong><br><span style="color: ' + T.MUTED + '; font-size: 10.5px; font-style: italic;">Not counted deal</span></td>' +
+                '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.MONO + '; font-size: 13.5px; font-weight: 700; text-align: right; color: ' + T.INK + ';">₹0</td>' +
+                '</tr>';
+              return;
+            }
+            if (d.selfTeam === 'Team') {
+              selfPayRows += '<tr>' +
+                '<td style="padding: 10px 8px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.MONO + '; font-size: 10px; color: ' + T.INK + ';">' + tcfCell(d, { withProject: true }) + shareTag + '</td>' +
+                '<td style="padding: 10px 8px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.MONO + '; font-size: 10.5px; text-align: right; color: ' + T.INK + '; white-space: nowrap;">' + fmtINR(d.revenue) + '</td>' +
+                '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.FONT + '; font-size: 11px;"><span style="background: #FEF3C7; color: ' + T.ORANGE_DEEP + '; font-size: 10.5px; font-weight: 700; padding: 3px 7px; border-radius: 3px;">Team deal</span></td>' +
+                '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; text-align: right; color: ' + T.MUTED + '; font-size: 14px;">-</td>' +
+                '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; text-align: right; color: ' + T.MUTED + '; font-size: 14px;">-</td>' +
+                '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.FONT + '; font-size: 10.5px; text-align: center; line-height: 1.35;"><strong style="color: ' + T.MUTED + ';">No incentive</strong><br><span style="color: ' + T.MUTED + '; font-size: 10.5px; font-style: italic;">Team deal - excluded from base</span></td>' +
+                '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.MONO + '; font-size: 13.5px; font-weight: 700; text-align: right; color: ' + T.INK + ';">₹0</td>' +
+                '</tr>';
+              return;
+            }
+            const provApplies = dr.whichApplies === 'provisional';
+            const confApplies = dr.whichApplies === 'confirmed';
+            const provShareCell = _shareCellHtml(bc.selfProvIncentive, dr.provShare, d.revenue, bc.selfProvBase, provApplies);
+            const showConf = d.stage !== 'Counted' && dr.confShare > 0;
+            const confDealRev = (d.isLoggedIn && d.collection > 0) ? d.revenue * (d.collection / 100) : d.revenue;
+            const confShareCell = showConf
+              ? _shareCellHtml(bc.selfConfIncentive, dr.confShare, confDealRev, bc.selfConfBase, confApplies)
+              : '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; text-align: right; color: ' + T.MUTED + '; font-size: 14px;">-</td>';
             let whichCell;
-            if (dr.whichApplies === 'provisional') whichCell = '<strong style="color: ' + T.GREEN_DEEP + ';">Provisional</strong>';
-            else if (dr.whichApplies === 'confirmed') whichCell = '<strong style="color: ' + T.ORANGE_DEEP + ';">Confirmed</strong>';
-            else whichCell = '<strong style="color: ' + T.MUTED + ';">—</strong>' + (dr.noReason ? '<br><span style="font-size: 10px; color: ' + T.MUTED + '; font-style: italic;">' + escapeHtml(dr.noReason) + '</span>' : '');
+            if (dr.whichApplies === 'provisional') {
+              whichCell = '<strong style="color: ' + T.GREEN_DEEP + ';">Provisional</strong><br><span style="color: ' + T.INK_SOFT + '; font-size: 10.5px;">25% focus advance</span>';
+            } else if (dr.whichApplies === 'confirmed') {
+              whichCell = d.isLoggedIn
+                ? '<strong style="color: #1E40AF;">Logged In</strong><br><span style="color: ' + T.INK_SOFT + '; font-size: 10.5px;">NR×' + fmtPct(d.collection) + ' in base, 100% payout</span>'
+                : '<strong style="color: ' + T.ORANGE_DEEP + ';">Confirmed</strong><br><span style="color: ' + T.INK_SOFT + '; font-size: 10.5px;">Collection ' + fmtPct(d.collection) + '</span>';
+            } else {
+              whichCell = '<strong style="color: ' + T.MUTED + ';">No incentive</strong>' + (dr.noReason ? '<br><span style="color: ' + T.MUTED + '; font-size: 10.5px; font-style: italic;">' + escapeHtml(dr.noReason) + '</span>' : '');
+            }
+            const payCell = dr.payable > 0
+              ? '<div style="font-family: ' + T.MONO + '; font-size: 10px; color: ' + T.MUTED + '; text-align: right; line-height: 1.3;">' + (dr.calcNote || '') + '</div><div style="font-family: ' + T.MONO + '; font-size: 13.5px; font-weight: 700; color: ' + T.NAVY + '; text-align: right; margin-top: 3px;">= ' + fmtINR(dr.payable) + '</div>'
+              : '<div style="font-family: ' + T.MONO + '; font-size: 13.5px; font-weight: 700; color: ' + T.INK + '; text-align: right;">₹0</div>';
             selfPayRows += '<tr>' +
-              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 10.5px; color: ' + T.INK + ';">' + tcfCell(d) + shareTag + '</td>' +
-              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 12px; text-align: right; color: ' + T.INK + ';">' + fmtINR(d.revenue) + '</td>' +
-              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.FONT + '; font-size: 11px; text-align: center; color: ' + T.INK_SOFT + ';">' + stg + '</td>' +
-              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.FONT + '; font-size: 11px; text-align: center;">' + whichCell + '</td>' +
-              '<td style="padding: 8px 10px; border-bottom: 1px solid ' + T.BORDER + '; font-family: ' + T.MONO + '; font-size: 12px; font-weight: 700; text-align: right; color: ' + T.NAVY + ';">' + fmtINR(dr.payable) + '</td>' +
+              '<td style="padding: 10px 8px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.MONO + '; font-size: 10px; color: ' + T.INK + ';">' + tcfCell(d, { withProject: true }) + shareTag + '</td>' +
+              '<td style="padding: 10px 8px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.MONO + '; font-size: 10.5px; text-align: right; color: ' + T.INK + '; white-space: nowrap;">' + fmtINR(d.revenue) + '</td>' +
+              '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.FONT + '; font-size: 11px; color: ' + T.INK_SOFT + ';">' + (d.isLoggedIn ? 'Logged In' : d.stage) + '<br>' + d.type + '</td>' +
+              provShareCell +
+              confShareCell +
+              '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; font-family: ' + T.FONT + '; font-size: 10.5px; text-align: center; line-height: 1.35;">' + whichCell + '</td>' +
+              '<td style="padding: 10px; border-bottom: 1px solid ' + T.BORDER + '; vertical-align: middle; text-align: right;">' + payCell + '</td>' +
               '</tr>';
           });
-          const selfTotalRow = '<tr style="background: ' + T.NAVY_SOFT + ';"><td colspan="4" style="padding: 12px; font-family: ' + T.FONT + '; font-size: 13px; font-weight: 700; color: ' + T.NAVY + ';">Total Self Payable</td><td style="padding: 12px; font-family: ' + T.MONO + '; font-size: 14px; font-weight: 700; color: ' + T.NAVY + '; text-align: right;">' + fmtINR(bc.selfPayable) + '</td></tr>';
+          const selfTotalRow = '<tr style="background: ' + T.NAVY_SOFT + ';"><td colspan="6" style="padding: 12px; font-family: ' + T.FONT + '; font-size: 13px; font-weight: 700; color: ' + T.NAVY + '; text-align: right;">Total Self Payable</td><td style="padding: 12px; font-family: ' + T.MONO + '; font-size: 14px; font-weight: 700; color: ' + T.NAVY + '; text-align: right;">' + fmtINR(bc.selfPayable) + '</td></tr>';
           stepsHtml += sectionH(nextNo(), 'Per-deal payable') + `<tr><td style="padding: 4px 0 12px 0;">
+            ${bulletList(['For each deal we compute a <strong>Deal Incentive Share</strong>, then apply the rule that fits the deal.'])}
+            ${_provPayBlock}
+            ${_confPayBlock}
+            <p style="font-family: ${T.FONT}; font-size: 13.5px; color: ${T.INK}; margin: 22px 0 6px 0; font-weight: 700;">Per-deal payable table</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; border: 1px solid ${T.BORDER}; border-radius: 6px; overflow: hidden;">
               <thead><tr style="background: ${T.NAVY};">
-                <th style="padding: 9px 10px; text-align: left; font-size: 10.5px; color: white; font-family: ${T.FONT};">TCF ID</th>
-                <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT};">Revenue</th>
-                <th style="padding: 9px 10px; text-align: center; font-size: 10.5px; color: white; font-family: ${T.FONT};">Stage</th>
-                <th style="padding: 9px 10px; text-align: center; font-size: 10.5px; color: white; font-family: ${T.FONT};">Which Applies</th>
-                <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT};">Payable</th>
+                <th style="padding: 9px 10px; text-align: left; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">TCF ID</th>
+                <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Deal Revenue</th>
+                <th style="padding: 9px 10px; text-align: left; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Stage &amp; Type</th>
+                <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Provisional Deal Incentive Share<div style="font-family: ${T.MONO}; font-size: 9.5px; font-weight: 500; color: rgba(255,255,255,0.6); margin-top: 3px; line-height: 1.35;">Prov Inc × Deal Rev ÷ Total Prov Rev</div></th>
+                <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Confirmed Deal Incentive Share<div style="font-family: ${T.MONO}; font-size: 9.5px; font-weight: 500; color: rgba(255,255,255,0.6); margin-top: 3px; line-height: 1.35;">Conf Inc × Deal Rev ÷ Total Conf Rev</div></th>
+                <th style="padding: 9px 10px; text-align: center; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Which Incentive applies</th>
+                <th style="padding: 9px 10px; text-align: right; font-size: 10.5px; color: white; font-family: ${T.FONT}; vertical-align: top;">Final Payable</th>
               </tr></thead>
               <tbody>${selfPayRows}${selfTotalRow}</tbody>
             </table>
