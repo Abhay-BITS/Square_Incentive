@@ -37,7 +37,7 @@ function normStage(s) {
   if (!s) return null;
   // Normalize both legacy naming (Counted/Collected/Confirmed) and My Incentive dashboard naming (Logged In (Count)/Collected (Count)/Confirmed (Count))
   // Strip parenthetical suffix "(Count)" or "(count)" first
-  const stripped = String(s).trim().replace(/\s*\(\s*count\s*\)\s*$/i, '').trim();
+  const stripped = String(s).trim().replace(/\s*\(\s*(?:not\s*)?count\s*\)\s*$/i, '').trim();
   const v = stripped.toLowerCase();
   // Logged In (Count) -> Counted
   if (v === 'logged in' || v === 'loggedin' || v === 'logged-in') return 'Counted';
@@ -68,8 +68,16 @@ function normMonth(s) {
     const d = new Date(Date.UTC(1899, 11, 30 + s));
     if (!isNaN(d.getTime())) return SALARY_MONTHS[((d.getUTCMonth() + 9) % 12)];
   }
-  // Strip a trailing year suffix such as "-26", "-2026", "/26" (e.g. "Apr-26" -> "Apr").
-  const v = String(s).trim().replace(/[\s\-\/]\d{2,4}$/, '');
+  const str = String(s).trim();
+  // ISO date string like "2026-07-15" or "2026-07-15T00:00:00"
+  const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const mo = Number(isoMatch[2]) - 1;
+    return SALARY_MONTHS[((mo + 9) % 12)];
+  }
+  // Strip a trailing year suffix such as "-26", "-2026", "/26" (e.g. "Apr-26" -> "Apr")
+  // and a leading day prefix such as "14-" (e.g. "14-May-26" -> "May").
+  const v = str.replace(/[\s\-\/]\d{2,4}$/, '').replace(/^\d{1,2}[\s\-\/]/, '');
   // Try match against 3-letter month abbrev
   const match = SALARY_MONTHS.find(m => m.toLowerCase() === v.toLowerCase() || MONTH_NAMES[m].toLowerCase() === v.toLowerCase());
   return match || null;
@@ -337,7 +345,7 @@ function validateAndNormalize(rmRows, dlRows) {
     const tcfLinkIdRaw = pick(r, 'TCF ID','TCFID','Tcf Id','tcfidd');
     const projectName = pick(r, 'Project Name','Deal Name','Project','Name','ProductName') || '';
     const revenue = pick(r, 'Revenue','Amount');
-    const dealMonth = pick(r, 'Deal Month','Month','deal_month');
+    const dealMonth = pick(r, 'Deal Month','Month','deal_month','deal_date','deal_Date','Deal Date');
     const stageRaw = pick(r, 'Stage','DealStatus');
     const typeRaw = pick(r, 'Type');
     const collectionRaw = pick(r, 'Collection %','Collection','Coll %');
@@ -541,7 +549,7 @@ function calculateIncentive(rm) {
     // scale their payable proportionally. sharePct is 0-100; default 100 = full share.
     let payableBeforeShare = payable;
     let shareApplied = false;
-    if (d.sharePct !== undefined && d.sharePct !== null && d.sharePct !== 100 && payable > 0) {
+    if (d.dealCategory !== 'TCF' && d.dealCategory !== 'MCF' && d.sharePct !== undefined && d.sharePct !== null && d.sharePct !== 100 && payable > 0) {
       payable = payable * (d.sharePct / 100);
       shareApplied = true;
       if (calcNote) {
