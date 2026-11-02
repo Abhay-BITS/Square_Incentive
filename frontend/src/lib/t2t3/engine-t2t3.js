@@ -457,7 +457,10 @@ function validateAndNormalize(rmRows, dlRows) {
       if (collectionRaw === null || collectionRaw === '' || isNaN(c)) {
         issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has no Collection %; treated as 100%.'});
         collection = 100;
+      } else if (c >= 99) {
+        collection = 100;
       } else {
+        stage = 'Confirmed';
         collection = c;
       }
     } else if (stage === 'Counted') {
@@ -566,6 +569,7 @@ function _computeBlock(deals, tier, ytdCost) {
     const selfConfBase = selfConfDeals.reduce((s, d) => {
       if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
       if (d.isLoggedIn && d.collection === 0) return s;
+      if (d.collection > 0 && d.collection < 100) return s + d.revenue * (d.collection / 100);
       return s + d.revenue;
     }, 0);
     const confCrossed = selfConfBase >= eligibilityTarget && selfConfBase > 0 && eligibilityTarget > 0;
@@ -639,6 +643,7 @@ function _computeBlock(deals, tier, ytdCost) {
   const selfConfBase = selfConfDeals.reduce((s, d) => {
     if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
     if (d.isLoggedIn && d.collection === 0) return s;
+    if (d.collection > 0 && d.collection < 100) return s + d.revenue * (d.collection / 100);
     return s + d.revenue;
   }, 0);
   const selfConfIncentive = selfConfBase > 0 ? 0.05 * selfConfBase : 0;
@@ -647,6 +652,7 @@ function _computeBlock(deals, tier, ytdCost) {
   const teamConfBase = teamConfDeals.reduce((s, d) => {
     if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
     if (d.isLoggedIn && d.collection === 0) return s;
+    if (d.collection > 0 && d.collection < 100) return s + d.revenue * (d.collection / 100);
     return s + d.revenue;
   }, 0);
   const teamCrossed = teamConfBase >= teamTarget && teamConfBase > 0 && teamTarget > 0;

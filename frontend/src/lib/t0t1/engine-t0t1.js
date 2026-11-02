@@ -390,15 +390,15 @@ function validateAndNormalize(rmRows, dlRows) {
       }
     } else if (stage === 'Collected') {
       const c = collNorm;
-      if (collectionRaw !== null && collectionRaw !== '' && !isNaN(c) && c >= 99 && c < 100) {
-        issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has Collection '+fmtPct(c)+' (not exactly 100%) - treating as 100%.'});
-      } else if (collectionRaw !== null && collectionRaw !== '' && (isNaN(c) || c < 99)) {
-        issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal must have Collection 100% (got "'+collectionRaw+'").'}); return;
-      }
-      if (collectionRaw === null || collectionRaw === '') {
+      if (collectionRaw === null || collectionRaw === '' || isNaN(c)) {
         issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Collected deal has no Collection %; treated as 100%.'});
+        collection = 100;
+      } else if (c >= 99) {
+        collection = 100;
+      } else {
+        stage = 'Confirmed';
+        collection = c;
       }
-      collection = 100;
     } else if (stage === 'Counted') {
       const c = collNorm;
       if (collectionRaw !== null && collectionRaw !== '' && !isNaN(c) && c > 0) {
@@ -477,6 +477,7 @@ function calculateIncentive(rm) {
   const confBase = confDeals.reduce((s, d) => {
     if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
     if (d.isLoggedIn && d.collection === 0) return s;
+    if (d.collection > 0 && d.collection < 100) return s + d.revenue * (d.collection / 100);
     return s + d.revenue;
   }, 0);
   const confCrossed = confBase >= eligibilityTarget && confBase > 0 && eligibilityTarget > 0;
