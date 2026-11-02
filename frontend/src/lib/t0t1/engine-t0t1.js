@@ -477,7 +477,6 @@ function calculateIncentive(rm) {
   const confBase = confDeals.reduce((s, d) => {
     if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
     if (d.isLoggedIn && d.collection === 0) return s;
-    if (d.collection > 0 && d.collection < 100) return s + d.revenue * (d.collection / 100);
     return s + d.revenue;
   }, 0);
   const confCrossed = confBase >= eligibilityTarget && confBase > 0 && eligibilityTarget > 0;

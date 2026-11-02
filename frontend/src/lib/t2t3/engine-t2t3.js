@@ -569,7 +569,6 @@ function _computeBlock(deals, tier, ytdCost) {
     const selfConfBase = selfConfDeals.reduce((s, d) => {
       if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
       if (d.isLoggedIn && d.collection === 0) return s;
-      if (d.collection > 0 && d.collection < 100) return s + d.revenue * (d.collection / 100);
       return s + d.revenue;
     }, 0);
     const confCrossed = selfConfBase >= eligibilityTarget && selfConfBase > 0 && eligibilityTarget > 0;
@@ -643,7 +642,6 @@ function _computeBlock(deals, tier, ytdCost) {
   const selfConfBase = selfConfDeals.reduce((s, d) => {
     if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
     if (d.isLoggedIn && d.collection === 0) return s;
-    if (d.collection > 0 && d.collection < 100) return s + d.revenue * (d.collection / 100);
     return s + d.revenue;
   }, 0);
   const selfConfIncentive = selfConfBase > 0 ? 0.05 * selfConfBase : 0;
@@ -652,7 +650,6 @@ function _computeBlock(deals, tier, ytdCost) {
   const teamConfBase = teamConfDeals.reduce((s, d) => {
     if (d.isLoggedIn && d.collection > 0) return s + d.revenue * (d.collection / 100);
     if (d.isLoggedIn && d.collection === 0) return s;
-    if (d.collection > 0 && d.collection < 100) return s + d.revenue * (d.collection / 100);
     return s + d.revenue;
   }, 0);
   const teamCrossed = teamConfBase >= teamTarget && teamConfBase > 0 && teamTarget > 0;
