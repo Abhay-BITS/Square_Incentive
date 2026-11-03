@@ -427,8 +427,12 @@ function validateAndNormalize(rmRows, dlRows) {
 
     if (!rmId) { issues.push({level:'err',loc:'Deals row '+rowNum,msg:'Missing Employee Code.'}); return; }
     if (!rmMap[rmId]) return;
-    const rev = parseNum(revenue);
-    if (isNaN(rev) || rev < 0) { issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Revenue invalid.'}); return; }
+    let rev = parseNum(revenue);
+    if (isNaN(rev)) { issues.push({level:'err',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Revenue invalid.'}); return; }
+    if (rev < 0) {
+      issues.push({level:'warn',loc:'Deals row '+rowNum+' ('+rmId+')',msg:'Revenue is negative (got "'+rev+'") - treated as 0 in the calculation.'});
+      rev = 0;
+    }
     let stage = normStage(stageRaw);
     const type = normType(typeRaw);
     const month = normMonth(dealMonth);
