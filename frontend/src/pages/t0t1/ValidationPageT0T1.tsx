@@ -3,11 +3,12 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContextT0T1';
 import { Layout } from '../../components/LayoutT0T1';
 import { BackLink } from '../../components/BackLink';
+import { exportComparisonT0T1 } from '../../lib/exportComparison';
 
 type Filter = 'all' | 'warn' | 'err';
 
 export default function ValidationPage() {
-  const { rms, issues, joinedCount } = useApp();
+  const { rms, issues, joinedCount, rawRmRows, rawDlRows } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('all');
   if (rms.length === 0) return <Navigate to="/t0" replace />;
@@ -130,6 +131,13 @@ export default function ValidationPage() {
          <div className="val-actions">
            <button className="btn primary" disabled={errCount > 0 || rms.length === 0} onClick={() => navigate('/t0/preview')}>
              Continue to PDF preview →
+           </button>
+           <button
+             className="btn ghost"
+             disabled={rms.length === 0 || rawRmRows.length === 0}
+             onClick={() => exportComparisonT0T1(rms, rawRmRows, rawDlRows)}
+           >
+             Download Comparison Sheet
            </button>
            <button className="btn ghost" onClick={() => navigate('/t0')}>
              Upload a different file

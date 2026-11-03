@@ -606,7 +606,7 @@ function _computeBlock(deals, tier, ytdCost) {
       }
       let payableBeforeShare = payable;
       let shareApplied = false;
-      if (d.dealCategory !== 'TCF' && d.dealCategory !== 'MCF' && d.sharePct !== undefined && d.sharePct !== null && d.sharePct !== 100 && payable > 0) {
+      if (d.dealCategory !== 'TCF' && d.stage !== 'Collected' && d.sharePct !== undefined && d.sharePct !== null && d.sharePct !== 100 && payable > 0) {
         payable = payable * (d.sharePct / 100); shareApplied = true; calcNote = calcNote + ' × ' + d.sharePct + '% (share)';
       }
       return { deal: d, provShare, confShare, selfShare: Math.max(provShare, confShare), teamShare: 0, payable, payableBeforeShare, shareApplied, whichApplies, calcNote, noReason, cashPayable: 0.80 * payable, esopPayable: 0.20 * payable };
@@ -693,6 +693,9 @@ function _computeBlock(deals, tier, ytdCost) {
       }
       let payableBeforeShare = payable;
       let shareApplied = false;
+      if (d.dealCategory !== 'TCF' && d.stage !== 'Collected' && d.sharePct !== undefined && d.sharePct !== null && d.sharePct !== 100 && payable > 0) {
+        payable = payable * (d.sharePct / 100); shareApplied = true; calcNote = calcNote + ' × ' + d.sharePct + '% (share)';
+      }
       return { deal: d, provShare, confShare, selfShare: Math.max(provShare, confShare), teamShare: 0, payable, payableBeforeShare, shareApplied, whichApplies, calcNote, noReason, cashPayable: 0.80 * payable, esopPayable: 0.20 * payable };
     }
     if (d.selfTeam === 'Team') {
@@ -705,6 +708,9 @@ function _computeBlock(deals, tier, ytdCost) {
       else { const rawPct = d.collection / 100; const pct = Math.max(0.5, rawPct); payable = pct * share; calcNote = fmtPct(pct * 100) + (rawPct < 0.5 ? ' (floor)' : '') + ' × ' + fmtINR(share); }
       let payableBeforeShare = payable;
       let shareApplied = false;
+      if (d.dealCategory !== 'TCF' && d.stage !== 'Collected' && d.sharePct !== undefined && d.sharePct !== null && d.sharePct !== 100 && payable > 0) {
+        payable = payable * (d.sharePct / 100); shareApplied = true; calcNote = calcNote + ' × ' + d.sharePct + '% (share)';
+      }
       return { deal: d, selfShare: 0, teamShare: share, payable, payableBeforeShare, shareApplied, whichApplies: 'team', calcNote, noReason: '', cashPayable: 0.80 * payable, esopPayable: 0.20 * payable };
     }
     return { deal: d, selfShare: 0, teamShare: 0, payable: 0, whichApplies: 'none', calcNote: '', noReason: '', cashPayable: 0, esopPayable: 0 };

@@ -20,7 +20,7 @@ export async function fetchFromBeats(
       signal,
     });
   } catch {
-    return { success: false, error: 'Could not reach the server. Make sure the backend is running.' };
+    return { success: false, error: 'Could not reach the Beats API server. Try uploading the Excel file manually instead.' };
   }
   const text = await res.text();
   if (!text) return { success: false, error: `Server returned empty response (${res.status})` };

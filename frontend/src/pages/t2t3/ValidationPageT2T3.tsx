@@ -3,11 +3,12 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAppT2T3 } from '../../context/AppContextT2T3';
 import { LayoutT2T3 } from '../../components/LayoutT2T3';
 import { BackLink } from '../../components/BackLink';
+import { exportComparisonT2T3 } from '../../lib/exportComparison';
 
 type Filter = 'all' | 'warn' | 'err';
 
 export default function ValidationPageT2T3() {
-  const { rms, issues, joinedCount } = useAppT2T3();
+  const { rms, issues, joinedCount, rawRmRows, rawDlRows } = useAppT2T3();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('all');
   if (rms.length === 0) return <Navigate to="/t2" replace />;
@@ -130,6 +131,13 @@ export default function ValidationPageT2T3() {
          <div className="val-actions">
            <button className="btn primary" disabled={errCount > 0 || rms.length === 0} onClick={() => navigate('/t2/preview')}>
              Continue to PDF preview →
+           </button>
+           <button
+             className="btn ghost"
+             disabled={rms.length === 0 || rawRmRows.length === 0}
+             onClick={() => exportComparisonT2T3(rms, rawRmRows, rawDlRows)}
+           >
+             Download Comparison Sheet
            </button>
            <button className="btn ghost" onClick={() => navigate('/t2')}>
              Upload a different file

@@ -441,10 +441,15 @@ function validateAndNormalize(rmRows, dlRows) {
     const tcfLinkId = (tcfLinkIdRaw !== null && tcfLinkIdRaw !== '' && /^\d+$/.test(String(tcfLinkIdRaw).trim()))
       ? String(tcfLinkIdRaw).trim() : null;
 
+    let dealCategory = 'TCF';
+    if (/^MCF-/i.test(tcfIdStr)) dealCategory = 'MCF';
+    else if (/^PNLSHARE\//i.test(tcfIdStr)) dealCategory = 'PNLSHARE';
+
     const isLoggedIn = /logged\s*in/i.test(String(stageRaw).replace(/\s*\(\s*count\s*\)\s*$/i, '').trim());
     rmMap[rmId].deals.push({
       tcfId: tcfIdStr,
       tcfLinkId,             // numeric Beats id, or null if this deal can't be linked
+      dealCategory,
       projectName: String(projectName || ''),
       revenue: rev,
       month: month || '',
@@ -549,7 +554,7 @@ function calculateIncentive(rm) {
     // scale their payable proportionally. sharePct is 0-100; default 100 = full share.
     let payableBeforeShare = payable;
     let shareApplied = false;
-    if (d.dealCategory !== 'TCF' && d.dealCategory !== 'MCF' && d.sharePct !== undefined && d.sharePct !== null && d.sharePct !== 100 && payable > 0) {
+    if (d.dealCategory !== 'TCF' && d.stage !== 'Collected' && d.sharePct !== undefined && d.sharePct !== null && d.sharePct !== 100 && payable > 0) {
       payable = payable * (d.sharePct / 100);
       shareApplied = true;
       if (calcNote) {

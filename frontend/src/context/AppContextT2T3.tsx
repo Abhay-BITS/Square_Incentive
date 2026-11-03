@@ -2,6 +2,7 @@ import { createContext, useContext, useRef, useState, type ReactNode } from 'rea
 import { calculateIncentive, validateAndNormalize } from '../lib/t2t3/engine-t2t3.js';
 import type { Issue, Rm } from '../lib/t2t3/engine-t2t3.js';
 import { uploadWorkbook } from '../lib/api.js';
+import { parseExcelLocal } from '../lib/parseLocal.js';
 
 type ToastKind = '' | 'success' | 'err';
 
@@ -20,6 +21,8 @@ interface AppState {
   rms: Rm[];
   issues: Issue[];
   joinedCount: number;
+  rawRmRows: Record<string, unknown>[];
+  rawDlRows: Record<string, unknown>[];
   navStatus: string;
   activeRmId: string | null;
   setActiveRmId: (id: string | null) => void;
@@ -35,6 +38,8 @@ export function AppProviderT2T3({ children }: { children: ReactNode }) {
   const [rms, setRms] = useState<Rm[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [joinedCount, setJoinedCount] = useState(0);
+  const [rawRmRows, setRawRmRows] = useState<Record<string, unknown>[]>([]);
+  const [rawDlRows, setRawDlRows] = useState<Record<string, unknown>[]>([]);
   const [navStatus, setNavStatus] = useState('No file loaded');
   const [activeRmId, setActiveRmId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -50,6 +55,8 @@ export function AppProviderT2T3({ children }: { children: ReactNode }) {
     setRms([]);
     setIssues([]);
     setJoinedCount(0);
+    setRawRmRows([]);
+    setRawDlRows([]);
     setActiveRmId(null);
     setNavStatus('No file loaded');
   }
@@ -57,16 +64,28 @@ export function AppProviderT2T3({ children }: { children: ReactNode }) {
   async function loadFile(file: File, onStage?: (stage: LoadStage) => void): Promise<boolean> {
     const tick = () => new Promise<void>((r) => setTimeout(r, 0));
     try {
-      onStage?.({ kind: 'uploading', percent: 0 });
-      const res = await uploadWorkbook(file, (f) => {
-        onStage?.(f >= 1 ? { kind: 'processing' } : { kind: 'uploading', percent: Math.round(f * 100) });
-      });
-      if (!res.success || !res.rmRows || !res.dlRows) {
-        throw new Error(res.error || 'Could not parse file.');
+      let rmRowsParsed: Record<string, unknown>[];
+      let dlRowsParsed: Record<string, unknown>[];
+      try {
+        onStage?.({ kind: 'uploading', percent: 0 });
+        const res = await uploadWorkbook(file, (f) => {
+          onStage?.(f >= 1 ? { kind: 'processing' } : { kind: 'uploading', percent: Math.round(f * 100) });
+        });
+        if (!res.success || !res.rmRows || !res.dlRows) throw new Error(res.error || 'Server parse failed');
+        rmRowsParsed = res.rmRows;
+        dlRowsParsed = res.dlRows;
+      } catch {
+        onStage?.({ kind: 'processing', detail: 'Server unavailable — parsing locally…' });
+        await tick();
+        const local = await parseExcelLocal(file, 't2t3');
+        rmRowsParsed = local.rmRows;
+        dlRowsParsed = local.dlRows;
       }
       onStage?.({ kind: 'calculating', percent: 0, detail: 'Validating rows' });
       await tick();
-      const { rms: parsedRms, issues: parsedIssues, joinedCount: jc } = validateAndNormalize(res.rmRows, res.dlRows);
+      setRawRmRows(rmRowsParsed);
+      setRawDlRows(dlRowsParsed);
+      const { rms: parsedRms, issues: parsedIssues, joinedCount: jc } = validateAndNormalize(rmRowsParsed, dlRowsParsed);
       for (let i = 0; i < parsedRms.length; i++) {
         parsedRms[i].calc = calculateIncentive(parsedRms[i]);
         if (i % 100 === 99 || i === parsedRms.length - 1) {
@@ -100,6 +119,8 @@ export function AppProviderT2T3({ children }: { children: ReactNode }) {
     try {
       onStage?.({ kind: 'calculating', percent: 0, detail: 'Validating rows' });
       await tick();
+      setRawRmRows(rmRows);
+      setRawDlRows(dlRows);
       const { rms: parsedRms, issues: parsedIssues, joinedCount: jc } = validateAndNormalize(rmRows, dlRows);
       for (let i = 0; i < parsedRms.length; i++) {
         parsedRms[i].calc = calculateIncentive(parsedRms[i]);
@@ -125,7 +146,7 @@ export function AppProviderT2T3({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ rms, issues, joinedCount, navStatus, activeRmId, setActiveRmId, toast, loadFile, loadFromRows, reset }}>
+    <Ctx.Provider value={{ rms, issues, joinedCount, rawRmRows, rawDlRows, navStatus, activeRmId, setActiveRmId, toast, loadFile, loadFromRows, reset }}>
       {children}
       <div className="toast-container">
         {toasts.map((t) => (
