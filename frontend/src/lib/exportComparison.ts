@@ -122,9 +122,6 @@ export function exportComparisonT0T1(
   rawDlRows: Row[],
 ) {
   const wb = XLSX.utils.book_new();
-  const rmIndex = indexByEmpCode(rawRmRows);
-  const rawDealMap = new Map<string, Row>();
-  for (const r of rawDlRows) rawDealMap.set(rawDealKey(r), r);
 
   // ── Sheet 1: RMs ──
   const rmOrigHeaders = getHeaders(rawRmRows);
