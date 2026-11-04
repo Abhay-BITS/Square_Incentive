@@ -665,11 +665,13 @@ function _computeBlock(deals, tier, ytdCost) {
   const teamAllBase = teamAllDeals.reduce((s, d) => s + d.revenue, 0);
 
   const dealResults = deals.map(d => {
+    // Keep provShare/confShare on every return shape so downstream consumers (HTML
+    // and the C# PDF renderer that calls dr.Num("provShare")) never hit a missing key.
     if (d.stage === 'Not counted') {
-      return { deal: d, selfShare: 0, teamShare: 0, payable: 0, whichApplies: 'none', calcNote: '', noReason: 'Not counted deal', cashPayable: 0, esopPayable: 0 };
+      return { deal: d, provShare: 0, confShare: 0, selfShare: 0, teamShare: 0, payable: 0, whichApplies: 'none', calcNote: '', noReason: 'Not counted deal', cashPayable: 0, esopPayable: 0 };
     }
     if (d.dealCategory === 'PNLSHARE' && d.stage !== 'Collected') {
-      return { deal: d, selfShare: 0, teamShare: 0, payable: 0, whichApplies: 'none', calcNote: '', noReason: 'PnL Share — not yet Collected', cashPayable: 0, esopPayable: 0 };
+      return { deal: d, provShare: 0, confShare: 0, selfShare: 0, teamShare: 0, payable: 0, whichApplies: 'none', calcNote: '', noReason: 'PnL Share — not yet Collected', cashPayable: 0, esopPayable: 0 };
     }
     if (d.selfTeam === 'Self') {
       const provShare = selfProvBase > 0 ? selfProvIncentive * (d.revenue / selfProvBase) : 0;
