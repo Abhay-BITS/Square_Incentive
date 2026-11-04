@@ -13,7 +13,8 @@ import { useAppT2T3 } from '../../context/AppContextT2T3.js';
 import { LayoutT2T3 } from '../../components/LayoutT2T3.js';
 import { BackLink } from '../../components/BackLink.js';
 
-const SEND_DELAY_MS = 1500;
+const SEND_CONCURRENCY = 6;      // emails in flight at the same time
+const BATCH_DELAY_MS = 150;      // short gap between batches to stay polite to SendGrid
 
 type SendStatus = 'idle' | 'sending' | 'paused' | 'done';
 
@@ -146,31 +147,46 @@ export default function SendPageT2T3() {
     let count = 0;
     let failedCount = 0;
 
-    for (let i = 0; i < toSend.length; i++) {
+    for (let i = 0; i < toSend.length; i += SEND_CONCURRENCY) {
       if (abortRef.current) { setStatus('paused'); return; }
 
-      const rm = toSend[i];
+      const batch = toSend.slice(i, i + SEND_CONCURRENCY);
       setCurrentIdx(i);
       setSendCount(count);
-      setSendingCurrent({ name: rm.name, empCode: rm.empCode });
+      setSendingCurrent({
+        name: batch.length === 1 ? batch[0].name : `${batch.length} RMs in parallel`,
+        empCode: batch.map((r) => r.empCode).join(', '),
+      });
 
-      const cc = getCc(rm);
-      const result = await sendEmail(rm, cc, smtpPass ? smtpUser : undefined, smtpPass || undefined, fromEmail, fromName);
+      const results = await Promise.all(batch.map((rm) =>
+        sendEmail(rm, getCc(rm), smtpPass ? smtpUser : undefined, smtpPass || undefined, fromEmail, fromName)
+      ));
 
-      if (result.success) {
+      const nowSent: string[] = [];
+      const nowFailed: Array<[string, string]> = [];
+      for (let j = 0; j < batch.length; j++) {
+        const rm = batch[j];
+        const result = results[j];
+        if (result.success) { nowSent.push(rm.empCode); count++; }
+        else { nowFailed.push([rm.empCode, result.error || 'Unknown error']); failedCount++; }
+      }
+      if (nowSent.length > 0) {
         setSentSet((prev) => {
           const next = new Set(prev);
-          next.add(rm.empCode);
+          for (const c of nowSent) next.add(c);
           return next;
         });
-        count++;
-      } else {
-        setFailedMap((prev) => new Map(prev).set(rm.empCode, result.error || 'Unknown error'));
-        failedCount++;
+      }
+      if (nowFailed.length > 0) {
+        setFailedMap((prev) => {
+          const next = new Map(prev);
+          for (const [c, e] of nowFailed) next.set(c, e);
+          return next;
+        });
       }
 
-      if (i < toSend.length - 1 && !abortRef.current) {
-        await new Promise((r) => setTimeout(r, SEND_DELAY_MS));
+      if (i + SEND_CONCURRENCY < toSend.length && !abortRef.current) {
+        await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
       }
     }
 
