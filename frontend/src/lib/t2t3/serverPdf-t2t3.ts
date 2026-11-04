@@ -26,7 +26,7 @@ export async function downloadServerPdf(rm: Rm): Promise<void> {
   if (rm.blocks && rm.blocks.length > 0) {
     throw new Error('Server PDF not available for promoted employees. Use HTML download instead.');
   }
-  const blob = await post('/api/pdf/single', { rm, tier: 't2t3' });
+  const blob = await postWithRetry('/api/pdf/single', { rm, tier: 't2t3' });
   saveAs(blob, `${rm.empCode}_${rm.calc.ddShort}DD.pdf`);
 }
 

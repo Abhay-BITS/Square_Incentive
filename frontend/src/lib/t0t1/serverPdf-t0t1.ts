@@ -25,7 +25,7 @@ async function post(path: string, body: unknown): Promise<Blob> {
 }
 
 export async function downloadServerPdf(rm: Rm): Promise<void> {
-  const blob = await post('/api/pdf/single', rm);
+  const blob = await postWithRetry('/api/pdf/single', rm);
   saveAs(blob, `${rm.empCode}_${rm.calc.ddShort}DD.pdf`);
 }
 
