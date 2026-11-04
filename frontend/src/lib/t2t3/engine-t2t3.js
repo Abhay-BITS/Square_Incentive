@@ -977,13 +977,18 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     let revenueMarkerRow = '';
     if (state === 'below_target' && revenueAmt > 0) {
       const markerPos = targetAmt > 0 ? (revenueAmt / targetAmt) * targetWidth : 0;
+      // Clamp badge anchor so it never overflows past the left or right edge:
+      //  - markerPos near 0: anchor badge's left edge at the marker (translateX 0)
+      //  - markerPos near 100: anchor badge's right edge at the marker (translateX -100%)
+      //  - otherwise: center the badge on the marker (translateX -50%)
+      const badgeTx = markerPos < 10 ? '0' : (markerPos > 90 ? '-100%' : '-50%');
       revenueMarkerRow = `
         <tr><td colspan="2" style="padding: 0 0 6px 0;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
             <tr>
               <td width="${markerPos}%" style="padding: 0;">&nbsp;</td>
               <td width="0%" style="padding: 0; white-space: nowrap; vertical-align: bottom;">
-                <div style="display: inline-block; background: ${T.GREEN}; color: white; padding: 3px 8px; border-radius: 3px; font-family: ${T.MONO}; font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px; transform: translateX(-50%); white-space: nowrap;">REVENUE · ${fmtL(revenueAmt)}</div>
+                <div style="display: inline-block; background: ${T.GREEN}; color: white; padding: 3px 8px; border-radius: 3px; font-family: ${T.MONO}; font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px; transform: translateX(${badgeTx}); white-space: nowrap;">REVENUE · ${fmtL(revenueAmt)}</div>
               </td>
               <td width="${100 - markerPos}%" style="padding: 0;">&nbsp;</td>
             </tr>

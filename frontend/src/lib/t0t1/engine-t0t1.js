@@ -880,6 +880,8 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
       const markerPos = targetAmt > 0 ? (revenueAmt / targetAmt) * targetWidth : 0;  // % of total width
       const leftGap = markerPos;
       const rightGap = 100 - markerPos;
+      // Clamp badge anchor so it never overflows past the left or right edge of the chart.
+      const badgeTx = markerPos < 10 ? '0' : (markerPos > 90 ? '-100%' : '-50%');
       extraTopPad = 'padding-top: 28px;';  // room for the pill above the target label
       revenueMarkerRow = `
         <tr>
@@ -888,7 +890,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
               <tr>
                 <td width="${leftGap}%" style="padding: 0;">&nbsp;</td>
                 <td width="0%" style="padding: 0; white-space: nowrap; vertical-align: bottom;">
-                  <div style="display: inline-block; background: ${T.RED}; color: white; padding: 3px 8px; border-radius: 3px; font-family: ${T.MONO}; font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px; transform: translateX(-50%); white-space: nowrap;">REVENUE \u00B7 ${fmtL(revenueAmt)}</div>
+                  <div style="display: inline-block; background: ${T.RED}; color: white; padding: 3px 8px; border-radius: 3px; font-family: ${T.MONO}; font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px; transform: translateX(${badgeTx}); white-space: nowrap;">REVENUE \u00B7 ${fmtL(revenueAmt)}</div>
                 </td>
                 <td width="${rightGap}%" style="padding: 0;">&nbsp;</td>
               </tr>
