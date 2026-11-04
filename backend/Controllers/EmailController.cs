@@ -26,7 +26,9 @@ public class EmailController : ControllerBase
         string? SmtpPass = null,
         string? Tier = null,
         string? FromEmail = null,
-        string? FromName = null
+        string? FromName = null,
+        string? PreRenderedHtml = null,
+        string? AttachmentFileName = null
     );
 
     private static (string host, int port, string user, string pass, string fromEmail, string fromName, bool ok) GetSendGridConfig()
@@ -42,7 +44,7 @@ public class EmailController : ControllerBase
     }
 
     private static MimeMessage BuildMessage(string fromEmail, string fromName, string toEmail, string toName,
-        string subject, string body, string fileName, byte[] pdfBytes, string[]? ccEmails = null)
+        string subject, string body, string fileName, byte[] attachmentBytes, ContentType attachmentType, string[]? ccEmails = null)
     {
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(fromName, fromEmail));
@@ -60,9 +62,33 @@ public class EmailController : ControllerBase
 
         message.Subject = subject;
         var bodyBuilder = new BodyBuilder { TextBody = body };
-        bodyBuilder.Attachments.Add(fileName, pdfBytes, new ContentType("application", "pdf"));
+        bodyBuilder.Attachments.Add(fileName, attachmentBytes, attachmentType);
         message.Body = bodyBuilder.ToMessageBody();
         return message;
+    }
+
+    private static readonly ContentType PdfContentType = new("application", "pdf");
+    private static readonly ContentType HtmlContentType = new("text", "html") { Charset = "utf-8" };
+
+    private static (byte[] bytes, string fileName, ContentType type) BuildAttachment(
+        JsonElement rm, string? tier, string? preRenderedHtml, string? attachmentFileName)
+    {
+        // Promo / client-side path: use pre-rendered HTML as the attachment.
+        if (!string.IsNullOrWhiteSpace(preRenderedHtml))
+        {
+            var htmlBytes = System.Text.Encoding.UTF8.GetBytes(preRenderedHtml);
+            var fallbackName = tier == "t2t3"
+                ? RendererT2T3.FileName(rm).Replace(".pdf", ".html", StringComparison.OrdinalIgnoreCase)
+                : Renderer.FileName(rm).Replace(".pdf", ".html", StringComparison.OrdinalIgnoreCase);
+            var name = !string.IsNullOrWhiteSpace(attachmentFileName) ? attachmentFileName! : fallbackName;
+            return (htmlBytes, name, HtmlContentType);
+        }
+
+        // Standard path: server-rendered PDF.
+        var t2t3 = tier == "t2t3";
+        var pdfBytes = t2t3 ? RendererT2T3.Render(rm) : Renderer.Render(rm);
+        var fileName = t2t3 ? RendererT2T3.FileName(rm) : Renderer.FileName(rm);
+        return (pdfBytes, fileName, PdfContentType);
     }
 
     private static async Task SendViaSendGrid(MimeMessage message, string host, int port, string user, string pass, CancellationToken ct)
@@ -96,17 +122,17 @@ public class EmailController : ControllerBase
         if (!sg.ok && !hasSmtp)
             return BadRequest(new { error = "No email credentials available. Configure SendGrid or provide SMTP credentials." });
 
-        var t2t3 = req.Tier == "t2t3";
-        byte[] pdfBytes;
+        byte[] attachmentBytes;
         string fileName;
+        ContentType attachmentType;
         try
         {
-            pdfBytes = t2t3 ? RendererT2T3.Render(req.Rm) : Renderer.Render(req.Rm);
-            fileName = t2t3 ? RendererT2T3.FileName(req.Rm) : Renderer.FileName(req.Rm);
+            (attachmentBytes, fileName, attachmentType) = BuildAttachment(
+                req.Rm, req.Tier, req.PreRenderedHtml, req.AttachmentFileName);
         }
         catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or JsonException)
         {
-            _logger.LogWarning(ex, "Invalid RM payload for email PDF");
+            _logger.LogWarning(ex, "Invalid RM payload for email attachment");
             return BadRequest(new { error = "Invalid RM payload: " + ex.Message });
         }
 
@@ -119,7 +145,7 @@ public class EmailController : ControllerBase
             try
             {
                 var message = BuildMessage(fromEmail, fromName, req.RecipientEmail, req.RecipientName,
-                    req.Subject, req.Body, fileName, pdfBytes, req.CcEmails);
+                    req.Subject, req.Body, fileName, attachmentBytes, attachmentType, req.CcEmails);
                 await SendViaSendGrid(message, sg.host, sg.port, sg.user, sg.pass, ct);
 
                 _logger.LogInformation("Email sent via SendGrid to {Recipient} ({EmpCode})", req.RecipientEmail,
@@ -138,7 +164,7 @@ public class EmailController : ControllerBase
             try
             {
                 var message = BuildMessage(fromEmail, fromName, req.RecipientEmail, req.RecipientName,
-                    req.Subject, req.Body, fileName, pdfBytes, req.CcEmails);
+                    req.Subject, req.Body, fileName, attachmentBytes, attachmentType, req.CcEmails);
                 await SendViaSmtp(message, req.SmtpUser!, req.SmtpPass!, ct);
 
                 _logger.LogInformation("Email sent via SMTP fallback to {Recipient} ({EmpCode})", req.RecipientEmail,
@@ -186,7 +212,9 @@ public class EmailController : ControllerBase
         string? SmtpUser = null,
         string? SmtpPass = null,
         string? FromEmail = null,
-        string? FromName = null
+        string? FromName = null,
+        string? PreRenderedHtml = null,
+        string? AttachmentFileName = null
     );
 
     [HttpPost("test-send")]
@@ -202,13 +230,13 @@ public class EmailController : ControllerBase
         if (!sg.ok && !hasSmtp)
             return BadRequest(new { error = "No email credentials available." });
 
-        var t2t3 = req.Tier == "t2t3";
-        byte[] pdfBytes;
+        byte[] attachmentBytes;
         string fileName;
+        ContentType attachmentType;
         try
         {
-            pdfBytes = t2t3 ? RendererT2T3.Render(req.Rm) : Renderer.Render(req.Rm);
-            fileName = t2t3 ? RendererT2T3.FileName(req.Rm) : Renderer.FileName(req.Rm);
+            (attachmentBytes, fileName, attachmentType) = BuildAttachment(
+                req.Rm, req.Tier, req.PreRenderedHtml, req.AttachmentFileName);
         }
         catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or JsonException)
         {
@@ -223,7 +251,7 @@ public class EmailController : ControllerBase
             try
             {
                 var message = BuildMessage(fromEmail, fromName, req.TestEmail, "Test Recipient",
-                    "[TEST] " + req.Subject, "[TEST EMAIL]\n\n" + req.Body, fileName, pdfBytes);
+                    "[TEST] " + req.Subject, "[TEST EMAIL]\n\n" + req.Body, fileName, attachmentBytes, attachmentType);
                 await SendViaSendGrid(message, sg.host, sg.port, sg.user, sg.pass, ct);
 
                 _logger.LogInformation("Test email sent via SendGrid to {TestEmail}", req.TestEmail);
@@ -240,7 +268,7 @@ public class EmailController : ControllerBase
             try
             {
                 var message = BuildMessage(fromEmail, fromName, req.TestEmail, "Test Recipient",
-                    "[TEST] " + req.Subject, "[TEST EMAIL]\n\n" + req.Body, fileName, pdfBytes);
+                    "[TEST] " + req.Subject, "[TEST EMAIL]\n\n" + req.Body, fileName, attachmentBytes, attachmentType);
                 await SendViaSmtp(message, req.SmtpUser!, req.SmtpPass!, ct);
 
                 _logger.LogInformation("Test email sent via SMTP to {TestEmail}", req.TestEmail);

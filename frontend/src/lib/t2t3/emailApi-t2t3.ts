@@ -1,6 +1,17 @@
 import type { Rm } from './engine-t2t3.js';
+import { generateEmailHtml } from './engine-t2t3.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://square-incentive.onrender.com';
+
+function isPromo(rm: Rm): boolean {
+  return Array.isArray(rm.blocks) && rm.blocks.length > 0;
+}
+
+function buildPromoAttachment(rm: Rm): { html: string; fileName: string } {
+  const { emailHtml } = generateEmailHtml(rm);
+  const ddShort = rm.calc?.ddShort || 'DD';
+  return { html: emailHtml, fileName: `${rm.empCode}_${ddShort}DD.html` };
+}
 
 export function buildEmailSubject(rm: Rm): string {
   const ddMonth = rm.calc?.ddLabel?.replace(/\s*\d{4}$/, '') || 'Dollar';
@@ -30,9 +41,6 @@ export async function sendEmail(
   fromEmail?: string,
   fromName?: string
 ): Promise<SendResult> {
-  if ((rm as any).blocks && (rm as any).blocks.length > 0) {
-    return { empCode: rm.empCode, success: false, error: 'Email with PDF not supported for promoted employees yet. Use HTML download.' };
-  }
   try {
     const payload: Record<string, unknown> = {
       Rm: rm,
@@ -43,6 +51,11 @@ export async function sendEmail(
       Body: buildEmailBody(rm),
       CcEmails: ccEmails,
     };
+    if (isPromo(rm)) {
+      const att = buildPromoAttachment(rm);
+      payload.PreRenderedHtml = att.html;
+      payload.AttachmentFileName = att.fileName;
+    }
     if (smtpUser && smtpPass) {
       payload.SmtpUser = smtpUser;
       payload.SmtpPass = smtpPass;
@@ -81,6 +94,11 @@ export async function sendTestEmail(
       Subject: buildEmailSubject(rm),
       Body: buildEmailBody(rm),
     };
+    if (isPromo(rm)) {
+      const att = buildPromoAttachment(rm);
+      payload.PreRenderedHtml = att.html;
+      payload.AttachmentFileName = att.fileName;
+    }
     if (smtpUser && smtpPass) {
       payload.SmtpUser = smtpUser;
       payload.SmtpPass = smtpPass;
