@@ -67,9 +67,11 @@ public class EmailController : ControllerBase
         return message;
     }
 
-    private static readonly ContentType PdfContentType = new("application", "pdf");
-    private static readonly ContentType HtmlContentType = new("text", "html") { Charset = "utf-8" };
-
+    // NOTE: MimeKit.ContentType is NOT thread-safe — AttachmentCollection.Add mutates the
+    // ContentType's internal header list when attaching it to a MIME part. Sharing a single
+    // ContentType across concurrent BuildMessage calls causes HeaderList race conditions
+    // ("Index was out of range", "Unexpected token at offset X"). Construct a fresh instance
+    // every call.
     private static (byte[] bytes, string fileName, ContentType type) BuildAttachment(
         JsonElement rm, string? tier, string? preRenderedHtml, string? attachmentFileName)
     {
@@ -81,14 +83,14 @@ public class EmailController : ControllerBase
                 ? RendererT2T3.FileName(rm).Replace(".pdf", ".html", StringComparison.OrdinalIgnoreCase)
                 : Renderer.FileName(rm).Replace(".pdf", ".html", StringComparison.OrdinalIgnoreCase);
             var name = !string.IsNullOrWhiteSpace(attachmentFileName) ? attachmentFileName! : fallbackName;
-            return (htmlBytes, name, HtmlContentType);
+            return (htmlBytes, name, new ContentType("text", "html") { Charset = "utf-8" });
         }
 
         // Standard path: server-rendered PDF.
         var t2t3 = tier == "t2t3";
         var pdfBytes = t2t3 ? RendererT2T3.Render(rm) : Renderer.Render(rm);
         var fileName = t2t3 ? RendererT2T3.FileName(rm) : Renderer.FileName(rm);
-        return (pdfBytes, fileName, PdfContentType);
+        return (pdfBytes, fileName, new ContentType("application", "pdf"));
     }
 
     private static async Task SendViaSendGrid(MimeMessage message, string host, int port, string user, string pass, CancellationToken ct)
