@@ -143,6 +143,7 @@ export default function SendPage() {
     const toSend = pendingRms;
     setSendTotal(toSend.length);
     let count = 0;
+    let failedCount = 0;
 
     for (let i = 0; i < toSend.length; i++) {
       if (abortRef.current) { setStatus('paused'); return; }
@@ -164,6 +165,7 @@ export default function SendPage() {
         count++;
       } else {
         setFailedMap((prev) => new Map(prev).set(rm.empCode, result.error || 'Unknown error'));
+        failedCount++;
       }
 
       if (i < toSend.length - 1 && !abortRef.current) {
@@ -173,7 +175,7 @@ export default function SendPage() {
 
     setSendCount(count);
     setStatus('done');
-    toast(`Finished! ${count} emails sent, ${failedMap.size} failed.`, 'success');
+    toast(`Finished! ${count} emails sent, ${failedCount} failed.`, failedCount > 0 ? 'err' : 'success');
   }
 
   function handlePause() {

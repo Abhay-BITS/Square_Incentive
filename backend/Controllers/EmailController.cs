@@ -68,7 +68,6 @@ public class EmailController : ControllerBase
     private static async Task SendViaSendGrid(MimeMessage message, string host, int port, string user, string pass, CancellationToken ct)
     {
         using var client = new SmtpClient();
-        client.ServerCertificateValidationCallback = (s, c, h, e) => true;
         await client.ConnectAsync(host, port, SecureSocketOptions.StartTls, ct);
         await client.AuthenticateAsync(user, pass, ct);
         await client.SendAsync(message, ct);
@@ -78,7 +77,6 @@ public class EmailController : ControllerBase
     private static async Task SendViaSmtp(MimeMessage message, string smtpUser, string smtpPass, CancellationToken ct)
     {
         using var client = new SmtpClient();
-        client.ServerCertificateValidationCallback = (s, c, h, e) => true;
         await client.ConnectAsync("smtp.gmail.com", 587, SecureSocketOptions.StartTls, ct);
         await client.AuthenticateAsync(smtpUser, smtpPass, ct);
         await client.SendAsync(message, ct);
@@ -166,7 +164,6 @@ public class EmailController : ControllerBase
         try
         {
             using var client = new SmtpClient();
-            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
             await client.ConnectAsync("smtp.gmail.com", 587, SecureSocketOptions.StartTls, ct);
             await client.AuthenticateAsync(req.SmtpUser, req.SmtpPass, ct);
             await client.DisconnectAsync(true, ct);

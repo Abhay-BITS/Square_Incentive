@@ -144,6 +144,7 @@ export default function SendPageT2T3() {
     const toSend = pendingRms;
     setSendTotal(toSend.length);
     let count = 0;
+    let failedCount = 0;
 
     for (let i = 0; i < toSend.length; i++) {
       if (abortRef.current) { setStatus('paused'); return; }
@@ -165,6 +166,7 @@ export default function SendPageT2T3() {
         count++;
       } else {
         setFailedMap((prev) => new Map(prev).set(rm.empCode, result.error || 'Unknown error'));
+        failedCount++;
       }
 
       if (i < toSend.length - 1 && !abortRef.current) {
@@ -174,7 +176,7 @@ export default function SendPageT2T3() {
 
     setSendCount(count);
     setStatus('done');
-    toast(`Finished! ${count} emails sent, ${failedMap.size} failed.`, 'success');
+    toast(`Finished! ${count} emails sent, ${failedCount} failed.`, failedCount > 0 ? 'err' : 'success');
   }
 
   function handlePause() {
