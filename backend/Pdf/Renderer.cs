@@ -344,11 +344,34 @@ public class Renderer
         string leftBg = leftActive ? GREEN_SOFT : MUTED_BG, leftBorder = leftActive ? GREEN : MUTED_BORDER, leftText = leftActive ? GREEN_DEEP : MUTED_TEXT;
         string rightBg = rightActive ? AMBER_SOFT : MUTED_BG2, rightBorder = rightActive ? ORANGE : MUTED_BORDER, rightText = rightActive ? ORANGE_DEEP : MUTED_TEXT;
 
-        s.Item().PaddingTop(P(12)).PaddingBottom(P(6)).ShowEntire().Column(v =>
+        double markerPos = (state == "below_target" && target > 0) ? rev / target * tw : 0;
+
+        s.Item().PaddingTop(P(12)).PaddingBottom(P(6)).ShowEntire().Layers(layers =>
         {
+            // Overlay: dashed vertical line at the revenue marker, descending from below
+            // the REVENUE badge down through the bar, matching the HTML preview.
             if (state == "below_target")
             {
-                double pos = target > 0 ? rev / target * tw : 0;
+                layers.Layer().PaddingTop(P(22)).PaddingBottom(P(70)).Row(r =>
+                {
+                    r.RelativeItem((float)Math.Max(markerPos, 0.01));
+                    r.ConstantItem(P(2)).Column(c =>
+                    {
+                        for (int i = 0; i < 24; i++)
+                        {
+                            c.Item().Height(P(3)).Background(RED);
+                            c.Item().Height(P(2));
+                        }
+                    });
+                    r.RelativeItem((float)Math.Max(100 - markerPos, 0.01));
+                });
+            }
+
+            layers.PrimaryLayer().Column(v =>
+            {
+            if (state == "below_target")
+            {
+                double pos = markerPos;
                 v.Item().PaddingBottom(4).Row(r =>
                 {
                     r.RelativeItem((float)Math.Max(pos - 12, 1));
@@ -394,7 +417,8 @@ public class Renderer
                 }
                 else t.Span($"{label} = {Fmt.Inr(five)} + {Fmt.Inr(forty)} = {Fmt.Inr(inc)}").Bold().FontSize(P(13.5)).FontColor(pillColor);
             });
-        });
+            });  // close PrimaryLayer Column
+        });  // close Layers
     }
 
     // ---------- step 4 ----------
