@@ -52,11 +52,19 @@ public class EmailController : ControllerBase
 
         if (ccEmails is { Length: > 0 })
         {
-            foreach (var cc in ccEmails)
+            // Defensive: CC cells in the source data may contain multiple addresses
+            // separated by comma/semicolon, display-name wrappers, trailing junk, or
+            // outright invalid strings. A single bad CC used to abort the whole email
+            // via MailboxAddress.Parse. Split on common separators and TryParse each,
+            // silently skipping ones MimeKit cannot parse.
+            foreach (var raw in ccEmails)
             {
-                var trimmed = cc.Trim();
-                if (!string.IsNullOrEmpty(trimmed))
-                    message.Cc.Add(MailboxAddress.Parse(trimmed));
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                foreach (var part in raw.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (!part.Contains('@')) continue;
+                    if (MailboxAddress.TryParse(part, out var addr)) message.Cc.Add(addr);
+                }
             }
         }
 
