@@ -915,7 +915,7 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     // vertical line at markerPos% that starts just below the pill and extends through the bar.
     // Rough vertical layout: pill row ~28px, labels ~18px, bar 46px. Line spans ~26px to ~100px.
     const dashedLineDiv = state === 'below_target'
-      ? `<div style="position: absolute; left: ${(revenueAmt / targetAmt * targetWidth).toFixed(2)}%; top: 26px; height: 78px; border-left: 2px dashed ${T.RED}; z-index: 5; pointer-events: none;"></div>`
+      ? `<div style="position: absolute; left: ${(revenueAmt / targetAmt * targetWidth).toFixed(2)}%; top: 22px; height: 64px; border-left: 2px dashed ${T.RED}; z-index: 5; pointer-events: none;"></div>`
       : '';
     const wrapperOpen = state === 'below_target' ? `<div style="position: relative;">` : '';
     const wrapperClose = state === 'below_target' ? `${dashedLineDiv}</div>` : '';

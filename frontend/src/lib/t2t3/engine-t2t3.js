@@ -1009,8 +1009,10 @@ function buildFullEmail(rm, c, first, month, rangeLabel, hero, T) {
     const _st = blockTier || rm.tier;
     const slabMultiplierLabel = (_st === 'T0' || _st === 'T1') ? 'SMx 5×' : _st === 'T2' ? 'SMx 4×' : 'SMx 3×';
 
+    // Dashed vertical line: extends from just below the badge down to the bottom of the bar,
+    // stopping before the ₹0 label and brackets row so nothing overlaps.
     const dashedLineDiv = state === 'below_target' && revenueAmt > 0
-      ? `<div style="position: absolute; left: ${(revenueAmt / targetAmt * targetWidth).toFixed(2)}%; top: 26px; height: 78px; border-left: 2px dashed ${T.RED}; z-index: 5; pointer-events: none;"></div>`
+      ? `<div style="position: absolute; left: ${(revenueAmt / targetAmt * targetWidth).toFixed(2)}%; top: 22px; height: 64px; border-left: 2px dashed ${T.RED}; z-index: 5; pointer-events: none;"></div>`
       : '';
     const wrapperOpen = state === 'below_target' ? `<div style="position: relative;">` : '';
     const wrapperClose = state === 'below_target' ? `${dashedLineDiv}</div>` : '';

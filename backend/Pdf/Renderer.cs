@@ -348,16 +348,16 @@ public class Renderer
 
         s.Item().PaddingTop(P(12)).PaddingBottom(P(6)).ShowEntire().Layers(layers =>
         {
-            // Overlay: dashed vertical line at the revenue marker, descending from below
-            // the REVENUE badge down through the bar, matching the HTML preview.
+            // Overlay: dashed vertical line at the revenue marker. Fixed height so it
+            // stops at the bar bottom and doesn't overlap the ₹0 label or brackets row.
             if (state == "below_target")
             {
-                layers.Layer().PaddingTop(P(22)).PaddingBottom(P(70)).Row(r =>
+                layers.Layer().PaddingTop(P(22)).Row(r =>
                 {
                     r.RelativeItem((float)Math.Max(markerPos, 0.01));
-                    r.ConstantItem(P(2)).Column(c =>
+                    r.ConstantItem(P(2)).Height(P(64)).Column(c =>
                     {
-                        for (int i = 0; i < 24; i++)
+                        for (int i = 0; i < 13; i++)
                         {
                             c.Item().Height(P(3)).Background(RED);
                             c.Item().Height(P(2));
